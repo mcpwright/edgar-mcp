@@ -1,0 +1,50 @@
+[project]
+name = "edgar-mcp"
+version = "0.1.0"
+description = "MCP server for SEC EDGAR — resolve issuers, search filings, and pull recent Reg CF / Reg D offerings inside your agent."
+readme = "README.md"
+authors = [
+    { name = "Devender Gollapally", email = "4103+devender@users.noreply.github.com" }
+]
+requires-python = ">=3.12"
+dependencies = [
+    "httpx>=0.28.1",
+    "mcp[cli]>=1.27.2",
+    "pydantic>=2.13.4",
+]
+
+[project.scripts]
+edgar-mcp = "edgar_mcp:main"
+
+[build-system]
+requires = ["uv_build>=0.11.17,<0.12.0"]
+build-backend = "uv_build"
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py312"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM", "C4", "RUF"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+[[tool.mypy.overrides]]
+module = "respx"
+ignore_missing_imports = true
+
+[dependency-groups]
+dev = [
+    "mypy>=2.1.0",
+    "pytest>=9.0.3",
+    "pytest-asyncio>=1.4.0",
+    "respx>=0.23.1",
+    "ruff>=0.15.15",
+]
