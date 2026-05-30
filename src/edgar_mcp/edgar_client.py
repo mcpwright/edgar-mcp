@@ -63,7 +63,9 @@ class _RateLimiter:
 class EdgarClient:
     """Thin async wrapper over the SEC's public JSON endpoints."""
 
-    def __init__(self, user_agent: str = DEFAULT_USER_AGENT, *, max_retries: int = 3) -> None:
+    def __init__(
+        self, user_agent: str = DEFAULT_USER_AGENT, *, max_retries: int = 3
+    ) -> None:
         self._client = httpx.AsyncClient(
             headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
             timeout=httpx.Timeout(30.0),
@@ -81,7 +83,9 @@ class EdgarClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get_json(self, url: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
+    async def get_json(
+        self, url: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
         """GET a URL as JSON, with throttling and retry on transient failures."""
         last_exc: Exception | None = None
         for attempt in range(self._max_retries):

@@ -5,7 +5,9 @@ from __future__ import annotations
 ARCHIVES_BASE = "https://www.sec.gov/Archives/edgar/data"
 
 
-def build_filing_url(cik: str | int, accession_no: str, primary_document: str | None) -> str:
+def build_filing_url(
+    cik: str | int, accession_no: str, primary_document: str | None
+) -> str:
     """Build a link to a filing's primary document, or its index page if unknown.
 
     EDGAR archive paths use the integer CIK and the accession number with dashes

@@ -1,0 +1,62 @@
+# Pre-commit hooks — a local mirror of the CI checks in
+# .github/workflows/pr.yml. Fails fast on lint / format / type / secret
+# issues before they reach CI.
+#
+# First-time setup:
+#   uv sync
+#   uv run pre-commit install
+#
+# Run against everything once (e.g. after a config change):
+#   uv run pre-commit run --all-files
+
+repos:
+  # ---- Ruff: lint + format (replaces flake8 / isort / pyupgrade) ----
+  # Keep this rev aligned with the `ruff>=...` pin in pyproject.toml — drift
+  # between pre-commit and CI is the usual "passes locally, fails CI" culprit.
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: v0.15.15
+    hooks:
+      - id: ruff
+        args: [--fix]
+        files: ^src/
+      - id: ruff-format
+        files: ^src/
+
+  # ---- MyPy: type check ----
+  # Local hook via `uv run` so it uses the project's mypy + pyproject.toml
+  # config (pydantic plugin, per-module overrides, files=src/**).
+  - repo: local
+    hooks:
+      - id: mypy
+        name: mypy
+        entry: uv run mypy
+        language: system
+        types: [python]
+        files: ^src/
+        pass_filenames: false
+
+  # ---- Secret scanning ----
+  - repo: https://github.com/Yelp/detect-secrets
+    rev: v1.5.0
+    hooks:
+      - id: detect-secrets
+        args: [--baseline, .secrets.baseline]
+        exclude: ^(\.secrets\.baseline|\.venv/|tests/.*fixture.*)$
+
+  # ---- General hygiene ----
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v5.0.0
+    hooks:
+      - id: trailing-whitespace
+        exclude: \.md$  # markdown's two-space line break is intentional
+      - id: end-of-file-fixer
+      - id: check-yaml
+        exclude: ^\.github/workflows/  # GitHub-flavored YAML can confuse the parser
+      - id: check-toml
+      - id: check-json
+      - id: check-merge-conflict
+      - id: check-added-large-files
+        args: [--maxkb=500]
+      - id: mixed-line-ending
+        args: [--fix=lf]
+      - id: check-case-conflict
