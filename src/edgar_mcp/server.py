@@ -12,8 +12,8 @@ from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
 from .edgar_client import EdgarClient, pad_cik
-from .formatting import build_filing_url
-from .models import FilingHit, Issuer
+from .formatting import build_filing_url, filing_fields_from_efts
+from .models import FilingHit, Issuer, Offering
 
 mcp = FastMCP("edgar")
 
@@ -146,25 +146,26 @@ async def search_filings(
         query, forms=forms, date_from=date_from, date_to=date_to
     )
     hits = data.get("hits", {}).get("hits", [])
+    return [FilingHit(**filing_fields_from_efts(h)) for h in hits[:limit]]
 
-    out: list[FilingHit] = []
-    for h in hits[:limit]:
-        src = h.get("_source", {})
-        accession, _, filename = h.get("_id", "").partition(":")
-        ciks = src.get("ciks") or []
-        cik = pad_cik(ciks[0]) if ciks else None
-        names = src.get("display_names") or []
-        out.append(
-            FilingHit(
-                issuer=names[0] if names else "",
-                cik=cik,
-                form=src.get("root_form") or src.get("file_type") or "",
-                filed=src.get("file_date", ""),
-                accession_no=accession,
-                url=build_filing_url(cik, accession, filename) if cik else None,
-            )
-        )
-    return out
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_recent_offerings(
+    form: str = "C", since: str | None = None, limit: int = 20
+) -> list[Offering]:
+    """List recent securities offerings filed with the SEC, newest first.
+
+    `form`: "C" for Regulation Crowdfunding (the Form C family — C, C/A, C-U,
+    C-AR, …) or "D" for Regulation D (the Form D family — D, D/A).
+    `since`: optional ISO date (YYYY-MM-DD) lower bound on the filing date.
+    Returns issuer, exact form, filed date, accession number, and a link.
+    """
+    f = form.strip().upper()
+    if f not in ("C", "D"):
+        raise ValueError('form must be "C" (Reg CF) or "D" (Reg D)')
+    data = await _edgar().full_text_search(forms=[f], date_from=since)
+    hits = data.get("hits", {}).get("hits", [])
+    return [Offering(**filing_fields_from_efts(h)) for h in hits[:limit]]
 
 
 def main() -> None:

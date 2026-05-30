@@ -122,14 +122,20 @@ class EdgarClient:
 
     async def full_text_search(
         self,
-        query: str,
+        query: str = "",
         *,
         forms: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
     ) -> dict[str, Any]:
-        """EDGAR full-text search over filing documents (efts.sec.gov)."""
-        params: dict[str, str] = {"q": query}
+        """EDGAR full-text search over filing documents (efts.sec.gov).
+
+        With no ``query``, results are browsed by ``forms`` / date and returned
+        newest-first — useful for "recent filings of form type X".
+        """
+        params: dict[str, str] = {}
+        if query:
+            params["q"] = query
         if forms:
             params["forms"] = ",".join(forms)
         if date_from:
