@@ -6,8 +6,8 @@ the SEC — built on Anthropic's official [`mcp` Python SDK](https://github.com/
 
 All tools are **read-only** and hit **public** SEC endpoints (no API key required).
 
-> Status: early. `lookup_issuer`, `list_filings`, and `search_filings` work today;
-> `get_recent_offerings` (Reg CF / Reg D) and `get_filing` are next. See the roadmap below.
+> Status: early. `lookup_issuer`, `list_filings`, `search_filings`, and
+> `get_recent_offerings` work today; `get_filing` is next. See the roadmap below.
 
 ## Tools
 
@@ -16,6 +16,7 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 | `lookup_issuer(query, limit=10)` | Resolve a ticker or company name → CIK, legal name, tickers, exchange. |
 | `list_filings(cik_or_query, form_type=None, limit=20)` | An issuer's most recent filings, newest first. Optional form-type filter (e.g. `10-K`, `C`, `D`). |
 | `search_filings(query, forms=None, date_from=None, date_to=None, limit=20)` | Full-text search across filing documents. |
+| `get_recent_offerings(form="C", since=None, limit=20)` | Recent securities offerings, newest first — `form="C"` (Reg CF / Form C family) or `form="D"` (Reg D / Form D family). |
 
 ## Install
 
@@ -60,7 +61,7 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 
 ## Roadmap
 
-- [ ] `get_recent_offerings(form=C|D)` — recent Reg CF / Reg D raises (the signature tool)
+- [x] `get_recent_offerings(form=C|D)` — recent Reg CF / Reg D raises
 - [ ] `get_filing(accession_no|url)` — open a filing and read its primary document
 - [ ] `get_company_facts(cik)` — XBRL financials
 - [ ] Publish to PyPI + the official MCP Registry
