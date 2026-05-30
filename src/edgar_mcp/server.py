@@ -40,7 +40,9 @@ def _issuers_from_map(data: dict[str, Any], query: str, limit: int) -> list[Issu
     by_cik: dict[str, dict[str, Any]] = {}
     for row in data["data"]:
         cik = pad_cik(row[ci])
-        entry = by_cik.setdefault(cik, {"name": row[ni], "tickers": [], "exchange": row[ei]})
+        entry = by_cik.setdefault(
+            cik, {"name": row[ni], "tickers": [], "exchange": row[ei]}
+        )
         ticker = (row[ti] or "").strip()
         if ticker and ticker not in entry["tickers"]:
             entry["tickers"].append(ticker)
@@ -51,7 +53,9 @@ def _issuers_from_map(data: dict[str, Any], query: str, limit: int) -> list[Issu
     exact: list[Issuer] = []
     partial: list[Issuer] = []
     for cik, e in by_cik.items():
-        issuer = Issuer(cik=cik, name=e["name"], tickers=e["tickers"], exchange=e["exchange"])
+        issuer = Issuer(
+            cik=cik, name=e["name"], tickers=e["tickers"], exchange=e["exchange"]
+        )
         if q in (t.upper() for t in e["tickers"]):
             exact.append(issuer)
         elif q in e["name"].upper():
@@ -65,7 +69,9 @@ async def _resolve_cik(cik_or_query: str) -> str:
     s = cik_or_query.strip().upper().removeprefix("CIK").strip()
     if s.isdigit():
         return pad_cik(s)
-    matches = _issuers_from_map(await _edgar().company_tickers_exchange(), cik_or_query, limit=1)
+    matches = _issuers_from_map(
+        await _edgar().company_tickers_exchange(), cik_or_query, limit=1
+    )
     if not matches:
         raise ValueError(f"No issuer found matching {cik_or_query!r}")
     return matches[0].cik
@@ -136,7 +142,9 @@ async def search_filings(
     `forms`: optional list of form types to restrict to, e.g. ["10-K", "8-K"].
     `date_from` / `date_to`: ISO dates (YYYY-MM-DD).
     """
-    data = await _edgar().full_text_search(query, forms=forms, date_from=date_from, date_to=date_to)
+    data = await _edgar().full_text_search(
+        query, forms=forms, date_from=date_from, date_to=date_to
+    )
     hits = data.get("hits", {}).get("hits", [])
 
     out: list[FilingHit] = []

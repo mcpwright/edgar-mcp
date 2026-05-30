@@ -14,8 +14,12 @@ class Issuer(BaseModel):
 
     cik: str = Field(description="10-digit zero-padded SEC Central Index Key")
     name: str = Field(description="Legal / display name as recorded by the SEC")
-    tickers: list[str] = Field(default_factory=list, description="Known trading symbols")
-    exchange: str | None = Field(default=None, description="Primary listing exchange, if any")
+    tickers: list[str] = Field(
+        default_factory=list, description="Known trading symbols"
+    )
+    exchange: str | None = Field(
+        default=None, description="Primary listing exchange, if any"
+    )
 
 
 class FilingHit(BaseModel):
@@ -25,7 +29,9 @@ class FilingHit(BaseModel):
     cik: str | None = Field(default=None, description="10-digit CIK of the filer")
     form: str = Field(description="Form type, e.g. 10-K, 8-K, C, D")
     filed: str = Field(description="Filing date, YYYY-MM-DD")
-    accession_no: str = Field(description="SEC accession number, e.g. 0000320193-23-000106")
+    accession_no: str = Field(
+        description="SEC accession number, e.g. 0000320193-23-000106"
+    )
     url: str | None = Field(
         default=None, description="Link to the primary document or filing index"
     )
