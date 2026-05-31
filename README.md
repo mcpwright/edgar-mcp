@@ -53,6 +53,10 @@ Add to `claude_desktop_config.json` (see `examples/`):
 > to ~10 req/s. Set your own via the `EDGAR_MCP_USER_AGENT` env var
 > (e.g. `"your-app your-email@example.com"`). The client throttles and retries for you.
 
+> **Caching:** responses are cached in-memory (byte-budgeted LRU) to cut latency and SEC load —
+> immutable filing-archive content for days, the ticker map for 24h, everything else briefly.
+> Set `EDGAR_MCP_CACHE=0` to disable.
+
 ## Develop
 
 ```bash
