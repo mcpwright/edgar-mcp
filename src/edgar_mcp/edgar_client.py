@@ -145,17 +145,22 @@ class EdgarClient:
         forms: list[str] | None = None,
         date_from: str | None = None,
         date_to: str | None = None,
+        location: str | None = None,
     ) -> dict[str, Any]:
         """EDGAR full-text search over filing documents (efts.sec.gov).
 
         With no ``query``, results are browsed by ``forms`` / date and returned
-        newest-first — useful for "recent filings of form type X".
+        newest-first — useful for "recent filings of form type X". ``location``
+        is a state/country code (or comma-separated list) filtering on the
+        filer's principal place of business.
         """
         params: dict[str, str] = {}
         if query:
             params["q"] = query
         if forms:
             params["forms"] = ",".join(forms)
+        if location:
+            params["locationCodes"] = location
         if date_from:
             params["startdt"] = date_from
         if date_to:

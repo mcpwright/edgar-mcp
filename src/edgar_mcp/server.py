@@ -180,19 +180,32 @@ async def search_filings(
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_recent_offerings(
-    form: str = "C", since: str | None = None, limit: int = 20
+    form: str = "C",
+    since: str | None = None,
+    state: str | None = None,
+    limit: int = 20,
 ) -> list[Offering]:
     """List recent securities offerings filed with the SEC, newest first.
 
     `form`: "C" for Regulation Crowdfunding (the Form C family — C, C/A, C-U,
     C-AR, …) or "D" for Regulation D (the Form D family — D, D/A).
     `since`: optional ISO date (YYYY-MM-DD) lower bound on the filing date.
+    `state`: optional 2-letter US state code (e.g. "CA") filtering on the
+    issuer's principal place of business; comma-separate for several.
     Returns issuer, exact form, filed date, accession number, and a link.
+
+    Note: there's no industry filter here — EDGAR doesn't populate an industry
+    code on these listings. To screen by industry, open a result with
+    `get_form_d_details` (its `industry_group`) or `get_form_c_details`.
     """
     f = form.strip().upper()
     if f not in ("C", "D"):
         raise ValueError('form must be "C" (Reg CF) or "D" (Reg D)')
-    data = await _edgar().full_text_search(forms=[f], date_from=since)
+    data = await _edgar().full_text_search(
+        forms=[f],
+        date_from=since,
+        location=state.strip().upper() if state else None,
+    )
     hits = data.get("hits", {}).get("hits", [])
     return [Offering(**filing_fields_from_efts(h)) for h in hits[:limit]]
 
