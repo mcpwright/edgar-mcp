@@ -22,6 +22,8 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 | `get_form_c_details(accession_or_url, cik=None)` | Parse a Form C (Reg CF) raise: target/max amount, price, security type, deadline, intermediary, employees, and a two-year financial snapshot (revenue, net income, assets, debt). |
 | `get_company_facts(cik_or_query)` | Headline financials from a public company's XBRL facts: latest annual revenue, gross/operating income, net income, assets, liabilities, equity, cash. |
 | `get_filing_text(url, offset=0, max_chars=20000)` | Fetch a document's text (HTML stripped) for reading/summarizing — paginated, since filings can exceed 1M characters. |
+| `get_insiders(cik_or_query, limit=25)` | A company's insiders (officers, directors, >10% owners) from recent Section 16 filings, with roles. |
+| `get_insider_trades(cik_or_query, limit=20)` | Recent insider transactions (Form 4): owner, role, buy/sell/grant, shares, price, shares owned after. |
 
 ## Install
 
@@ -74,6 +76,7 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [x] `get_filing(accession_or_url)` — open a filing and list its documents
 - [x] `get_form_d_details(...)` — parse Reg D offering data (amount, investors, people)
 - [x] `get_form_c_details(...)` — parse Reg CF offering data (target/max, financials, terms)
+- [x] `get_insiders` / `get_insider_trades` — Section 16 (Form 3/4/5) insiders & trades
 - [x] State filter on `get_recent_offerings` (industry isn't filterable — EDGAR omits SIC on these listings; screen via `get_form_d_details.industry_group`)
 - [x] Reg A (Form 1-A) support in `get_recent_offerings`
 - [x] `get_company_facts(cik)` — XBRL headline financials

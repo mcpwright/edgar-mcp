@@ -24,6 +24,7 @@ from .formatting import (
 )
 from .formc import parse_form_c
 from .formd import parse_form_d
+from .forms345 import NotOwnershipDocError, parse_ownership_doc, strip_xsl_prefix
 from .htmltext import html_to_text
 from .issuers import lookup_issuers, resolve_cik
 from .models import (
@@ -34,10 +35,15 @@ from .models import (
     FilingText,
     FormCDetails,
     FormDDetails,
+    Insider,
+    InsiderFiling,
     Issuer,
     Offering,
 )
 from .xbrl import extract_company_facts
+
+# How many recent ownership filings to scan when building an insider roster.
+_INSIDER_SCAN_LIMIT = 40
 
 _INSTRUCTIONS = """\
 Read-only access to U.S. SEC EDGAR filings and company data (no API key).
@@ -368,6 +374,90 @@ async def get_filing_text(
         offset=offset,
         truncated=offset + len(page) < total,
     )
+
+
+async def _recent_ownership_filings(
+    edgar: EdgarClient, cik_or_query: str, *, forms: set[str], max_filings: int
+) -> list[InsiderFiling]:
+    """Fetch + parse an issuer's recent Section 16 filings of the given forms."""
+    cik = await resolve_cik(edgar, cik_or_query)
+    recent = (await edgar.submissions(cik))["filings"]["recent"]
+    out: list[InsiderFiling] = []
+    for form, filed, acc, doc in zip(
+        recent["form"],
+        recent["filingDate"],
+        recent["accessionNumber"],
+        recent["primaryDocument"],
+        strict=False,
+    ):
+        if form not in forms:
+            continue
+        base = filing_dir_url(cik, acc)
+        try:
+            xml = await edgar.get_text(f"{base}/{strip_xsl_prefix(doc)}")
+            out.append(
+                parse_ownership_doc(
+                    xml, accession_no=acc, filed=filed, url=f"{base}/{acc}-index.htm"
+                )
+            )
+        except (EdgarError, NotOwnershipDocError):
+            continue  # skip filings we can't fetch/parse, keep going
+        if len(out) >= max_filings:
+            break
+    return out
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_insider_trades(
+    cik_or_query: str, ctx: Context, limit: int = 20
+) -> list[InsiderFiling]:
+    """Recent insider (Section 16) transactions for a company, newest first.
+
+    Each result is one Form 4 filing: the reporting owner, their role(s), and the
+    trades reported (buy/sell/grant/exercise, shares, price, shares owned after).
+    `cik_or_query`: a CIK or a name/ticker to resolve.
+
+    Insider data exists for public reporting companies (officers, directors, and
+    >10% owners file Forms 3/4/5); most private Reg CF / Reg D issuers have none.
+    """
+    return await _recent_ownership_filings(
+        _edgar(ctx), cik_or_query, forms={"4"}, max_filings=limit
+    )
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_insiders(
+    cik_or_query: str, ctx: Context, limit: int = 25
+) -> list[Insider]:
+    """The insiders of a company — officers, directors, and >10% owners.
+
+    Built from recent Section 16 filings (Forms 3/4/5), de-duplicated per person
+    with their role(s) and most recent filing date. `cik_or_query`: a CIK or a
+    name/ticker. Reflects recent filings, so very large boards may be partial.
+    """
+    filings = await _recent_ownership_filings(
+        _edgar(ctx),
+        cik_or_query,
+        forms={"3", "4", "5"},
+        max_filings=_INSIDER_SCAN_LIMIT,
+    )
+    roster: dict[str, Insider] = {}
+    for f in filings:  # submissions are newest-first, so first sighting is most recent
+        key = f.owner_cik or f.owner_name
+        existing = roster.get(key)
+        if existing is None:
+            roster[key] = Insider(
+                name=f.owner_name,
+                cik=f.owner_cik,
+                roles=list(f.roles),
+                officer_title=f.officer_title,
+                last_filing=f.filed,
+            )
+        else:
+            for role in f.roles:
+                if role not in existing.roles:
+                    existing.roles.append(role)
+    return list(roster.values())[:limit]
 
 
 def main() -> None:
