@@ -297,6 +297,74 @@ class FilingText(BaseModel):
     truncated: bool = Field(description="True if more text remains past this page")
 
 
+class InsiderTransaction(BaseModel):
+    """One transaction line from a Section 16 insider filing (Form 4/5)."""
+
+    security: str | None = Field(
+        default=None, description="Security title, e.g. Common Stock"
+    )
+    date: str | None = Field(default=None, description="Transaction date (YYYY-MM-DD)")
+    code: str | None = Field(
+        default=None, description="SEC transaction code, e.g. P, S, A, M"
+    )
+    action: str | None = Field(default=None, description="Human label for the code")
+    acquired_disposed: str | None = Field(
+        default=None, description="'A' (acquired) or 'D' (disposed)"
+    )
+    shares: float | None = Field(default=None, description="Number of shares")
+    price_per_share: float | None = Field(
+        default=None, description="Price per share, USD"
+    )
+    value: float | None = Field(
+        default=None, description="shares × price, when both known"
+    )
+    shares_owned_after: float | None = Field(
+        default=None, description="Shares beneficially owned after the transaction"
+    )
+    direct_or_indirect: str | None = Field(
+        default=None, description="'D' (direct) or 'I' (indirect) ownership"
+    )
+    derivative: bool = Field(
+        default=False, description="From the derivative table (options, etc.)"
+    )
+
+
+class InsiderFiling(BaseModel):
+    """One Section 16 filing (Form 3/4/5): the owner, their roles, and trades."""
+
+    form: str = Field(description="Form type: 3, 4, or 5")
+    filed: str | None = Field(default=None, description="Filing date (YYYY-MM-DD)")
+    accession_no: str = Field(description="SEC accession number")
+    url: str | None = Field(default=None, description="Link to the filing index")
+    owner_name: str = Field(description="Reporting owner's name")
+    owner_cik: str | None = Field(default=None, description="Reporting owner's CIK")
+    roles: list[str] = Field(
+        default_factory=list, description="e.g. Director, Officer (CEO), 10% owner"
+    )
+    officer_title: str | None = Field(
+        default=None, description="Officer title, if an officer"
+    )
+    transactions: list[InsiderTransaction] = Field(
+        default_factory=list, description="Transactions reported in this filing"
+    )
+
+
+class Insider(BaseModel):
+    """A distinct insider of an issuer, aggregated across recent filings."""
+
+    name: str = Field(description="Insider's name")
+    cik: str | None = Field(default=None, description="Insider's CIK")
+    roles: list[str] = Field(
+        default_factory=list, description="Relationship(s) to the issuer"
+    )
+    officer_title: str | None = Field(
+        default=None, description="Officer title, if an officer"
+    )
+    last_filing: str | None = Field(
+        default=None, description="Date of their most recent Section 16 filing"
+    )
+
+
 class Filing(BaseModel):
     """A single filing: its metadata and the documents it contains."""
 
