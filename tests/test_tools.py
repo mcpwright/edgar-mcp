@@ -3,7 +3,26 @@ import pytest
 import respx
 
 from edgar_mcp import server
-from edgar_mcp.edgar_client import FULLTEXT_SEARCH_URL
+from edgar_mcp.edgar_client import (
+    BROWSE_EDGAR_URL,
+    FULLTEXT_SEARCH_URL,
+    SUBMISSIONS_URL,
+    TICKERS_EXCHANGE_URL,
+)
+
+# An empty ticker map — forces the private-company search fallback.
+_EMPTY_TICKERS = {"fields": ["cik", "name", "ticker", "exchange"], "data": []}
+# browse-edgar company-search results (multi-match Atom: CIKs, no usable name).
+_SEARCH_ATOM = (
+    "<feed><entry><content><company-info>"
+    "<cik>0001661779</cik></company-info></content></entry></feed>"
+)
+# browse-edgar single-CIK Atom (carries the conformed name).
+_NAME_ATOM = (
+    "<feed><content><company-info>"
+    "<conformed-name>STARTENGINE CROWDFUNDING, INC.</conformed-name>"
+    "<cik>0001661779</cik></company-info></content></feed>"
+)
 
 # One efts (full-text search) hit, shaped like a real Form C result.
 _EFTS_FORM_C = {
@@ -99,6 +118,60 @@ async def test_get_filing_by_url() -> None:
 async def test_get_filing_bare_accession_needs_cik() -> None:
     with pytest.raises(ValueError):
         await server.get_filing("0000320193-23-000106")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_lookup_issuer_private_company_fallback() -> None:
+    # Not in the ticker map -> falls back to EDGAR company search + name lookup.
+    respx.get(TICKERS_EXCHANGE_URL).mock(
+        return_value=httpx.Response(200, json=_EMPTY_TICKERS)
+    )
+    respx.get(BROWSE_EDGAR_URL).mock(
+        side_effect=[
+            httpx.Response(200, text=_SEARCH_ATOM),  # company search -> CIK
+            httpx.Response(200, text=_NAME_ATOM),  # single-CIK -> name
+        ]
+    )
+
+    issuers = await server.lookup_issuer("StartEngine")
+
+    assert len(issuers) == 1
+    assert issuers[0].cik == "0001661779"
+    assert "STARTENGINE" in issuers[0].name.upper()
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_list_filings_resolves_private_company_name() -> None:
+    respx.get(TICKERS_EXCHANGE_URL).mock(
+        return_value=httpx.Response(200, json=_EMPTY_TICKERS)
+    )
+    respx.get(BROWSE_EDGAR_URL).mock(
+        return_value=httpx.Response(200, text=_SEARCH_ATOM)
+    )
+    respx.get(SUBMISSIONS_URL.format(cik="0001661779")).mock(
+        return_value=httpx.Response(
+            200,
+            json={
+                "name": "STARTENGINE CROWDFUNDING, INC.",
+                "filings": {
+                    "recent": {
+                        "form": ["10-Q"],
+                        "filingDate": ["2026-05-20"],
+                        "accessionNumber": ["0001104659-26-064442"],
+                        "primaryDocument": ["primary_doc.htm"],
+                    }
+                },
+            },
+        )
+    )
+
+    filings = await server.list_filings("StartEngine", limit=5)
+
+    assert filings
+    assert filings[0].issuer.startswith("STARTENGINE")
+    assert filings[0].form == "10-Q"
 
 
 @respx.mock

@@ -13,7 +13,7 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 
 | Tool | What it does |
 |---|---|
-| `lookup_issuer(query, limit=10)` | Resolve a ticker or company name → CIK, legal name, tickers, exchange. |
+| `lookup_issuer(query, limit=10)` | Resolve a ticker or company name → CIK, legal name, tickers, exchange. Works for exchange-listed **and** private / non-exchange filers (Reg CF / Reg A issuers, funds). |
 | `list_filings(cik_or_query, form_type=None, limit=20)` | An issuer's most recent filings, newest first. Optional form-type filter (e.g. `10-K`, `C`, `D`). |
 | `search_filings(query, forms=None, date_from=None, date_to=None, limit=20)` | Full-text search across filing documents. |
 | `get_recent_offerings(form="C", since=None, limit=20)` | Recent securities offerings, newest first — `form="C"` (Reg CF / Form C family) or `form="D"` (Reg D / Form D family). |
