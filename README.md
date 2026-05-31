@@ -19,6 +19,7 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 | `get_recent_offerings(form="C", since=None, limit=20)` | Recent securities offerings, newest first — `form="C"` (Reg CF / Form C family) or `form="D"` (Reg D / Form D family). |
 | `get_filing(accession_or_url, cik=None)` | Open one filing: form, filing date, primary-document link, and every document in the filing. |
 | `get_form_d_details(accession_or_url, cik=None)` | Parse a Form D (Reg D) raise: offering amount, sold/remaining, min investment, # investors, industry, revenue range, security types, exemptions, and the officers/directors/promoters. |
+| `get_form_c_details(accession_or_url, cik=None)` | Parse a Form C (Reg CF) raise: target/max amount, price, security type, deadline, intermediary, employees, and a two-year financial snapshot (revenue, net income, assets, debt). |
 
 ## Install
 
@@ -66,7 +67,7 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [x] `get_recent_offerings(form=C|D)` — recent Reg CF / Reg D raises
 - [x] `get_filing(accession_or_url)` — open a filing and list its documents
 - [x] `get_form_d_details(...)` — parse Reg D offering data (amount, investors, people)
-- [ ] `get_form_c_details(...)` — parse Reg CF offering data (target/max, financials, terms)
+- [x] `get_form_c_details(...)` — parse Reg CF offering data (target/max, financials, terms)
 - [ ] Industry / state filters on `get_recent_offerings`
 - [ ] `get_company_facts(cik)` — XBRL financials
 - [ ] Publish to PyPI + the official MCP Registry
