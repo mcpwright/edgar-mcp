@@ -262,6 +262,31 @@ class FormCDetails(BaseModel):
     )
 
 
+class FinancialFact(BaseModel):
+    """One headline financial metric from a company's XBRL facts."""
+
+    concept: str = Field(description="us-gaap concept tag, e.g. NetIncomeLoss")
+    label: str = Field(description="Human-readable metric name, e.g. Net income")
+    value: float = Field(description="Reported value")
+    unit: str = Field(description="Unit, e.g. USD")
+    fiscal_year: int | None = Field(default=None, description="Fiscal year")
+    period_end: str | None = Field(
+        default=None, description="Period end date (YYYY-MM-DD)"
+    )
+    form: str | None = Field(default=None, description="Source form, e.g. 10-K")
+
+
+class CompanyFacts(BaseModel):
+    """A compact financial summary from a company's XBRL facts (public filers)."""
+
+    cik: str = Field(description="10-digit CIK of the company")
+    entity_name: str = Field(description="Entity name as recorded in XBRL")
+    facts: list[FinancialFact] = Field(
+        default_factory=list,
+        description="Headline metrics, each at its latest annual value",
+    )
+
+
 class Filing(BaseModel):
     """A single filing: its metadata and the documents it contains."""
 

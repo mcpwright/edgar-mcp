@@ -24,6 +24,7 @@ TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 FULLTEXT_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
 BROWSE_EDGAR_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
+COMPANYFACTS_URL = "https://data.sec.gov/api/xbrl/companyfacts/CIK{cik}.json"
 
 # browse-edgar's company-search Atom feed (used for private/non-exchange filers).
 _CIK_RE = re.compile(r"<cik>(\d+)</cik>")
@@ -137,6 +138,11 @@ class EdgarClient:
     async def submissions(self, cik: str | int) -> dict[str, Any]:
         """An issuer's metadata + recent filing history."""
         return await self.get_json(SUBMISSIONS_URL.format(cik=pad_cik(cik)))
+
+    async def company_facts(self, cik: str | int) -> dict[str, Any]:
+        """XBRL company facts (financial concepts over time). 404s for filers
+        without XBRL data (i.e. most non-reporting private companies)."""
+        return await self.get_json(COMPANYFACTS_URL.format(cik=pad_cik(cik)))
 
     async def full_text_search(
         self,

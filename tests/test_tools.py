@@ -70,6 +70,16 @@ async def test_get_recent_offerings_rejects_bad_form() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
+async def test_get_recent_offerings_reg_a_maps_to_1a() -> None:
+    route = respx.get(FULLTEXT_SEARCH_URL).mock(
+        return_value=httpx.Response(200, json=_EFTS_FORM_C)
+    )
+    await server.get_recent_offerings("A")
+    assert route.calls.last.request.url.params["forms"] == "1-A"
+
+
+@respx.mock
+@pytest.mark.asyncio
 async def test_get_recent_offerings_state_filter() -> None:
     route = respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
