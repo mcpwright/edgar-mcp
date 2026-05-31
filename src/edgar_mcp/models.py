@@ -139,6 +139,129 @@ class FormDDetails(BaseModel):
     )
 
 
+class FormCFinancials(BaseModel):
+    """Two-year financial snapshot disclosed in a Form C (all in dollars)."""
+
+    revenue_recent: float | None = Field(
+        default=None, description="Revenue, most recent FY"
+    )
+    revenue_prior: float | None = Field(default=None, description="Revenue, prior FY")
+    net_income_recent: float | None = Field(
+        default=None, description="Net income, most recent FY"
+    )
+    net_income_prior: float | None = Field(
+        default=None, description="Net income, prior FY"
+    )
+    total_assets_recent: float | None = Field(
+        default=None, description="Total assets, most recent FY"
+    )
+    total_assets_prior: float | None = Field(
+        default=None, description="Total assets, prior FY"
+    )
+    cash_recent: float | None = Field(
+        default=None, description="Cash & equivalents, most recent FY"
+    )
+    cash_prior: float | None = Field(
+        default=None, description="Cash & equivalents, prior FY"
+    )
+    accounts_receivable_recent: float | None = Field(
+        default=None, description="Accounts receivable, most recent FY"
+    )
+    accounts_receivable_prior: float | None = Field(
+        default=None, description="Accounts receivable, prior FY"
+    )
+    short_term_debt_recent: float | None = Field(
+        default=None, description="Short-term debt, most recent FY"
+    )
+    short_term_debt_prior: float | None = Field(
+        default=None, description="Short-term debt, prior FY"
+    )
+    long_term_debt_recent: float | None = Field(
+        default=None, description="Long-term debt, most recent FY"
+    )
+    long_term_debt_prior: float | None = Field(
+        default=None, description="Long-term debt, prior FY"
+    )
+    cost_of_goods_sold_recent: float | None = Field(
+        default=None, description="COGS, most recent FY"
+    )
+    cost_of_goods_sold_prior: float | None = Field(
+        default=None, description="COGS, prior FY"
+    )
+    taxes_paid_recent: float | None = Field(
+        default=None, description="Taxes paid, most recent FY"
+    )
+    taxes_paid_prior: float | None = Field(
+        default=None, description="Taxes paid, prior FY"
+    )
+
+
+class FormCDetails(BaseModel):
+    """Structured data parsed from a Form C (Reg CF) crowdfunding filing."""
+
+    cik: str = Field(description="10-digit CIK of the issuer")
+    accession_no: str = Field(description="SEC accession number")
+    url: str | None = Field(default=None, description="Link to the filing index")
+    submission_type: str | None = Field(
+        default=None, description="Form C variant, e.g. C, C/A, C-U, C-AR"
+    )
+    is_amendment: bool = Field(description="True if this is an amendment (C/A, …)")
+
+    issuer_name: str = Field(description="Issuer's name")
+    legal_status: str | None = Field(
+        default=None, description="Legal form, e.g. Corporation, LLC"
+    )
+    jurisdiction: str | None = Field(
+        default=None, description="Jurisdiction of organization"
+    )
+    date_incorporation: str | None = Field(
+        default=None, description="Date of incorporation (MM-DD-YYYY)"
+    )
+    issuer_website: str | None = Field(default=None, description="Issuer website")
+    intermediary: str | None = Field(
+        default=None, description="Funding portal / intermediary name"
+    )
+    intermediary_crd: str | None = Field(
+        default=None, description="Intermediary CRD number"
+    )
+
+    security_type: str | None = Field(
+        default=None, description="Type of security offered"
+    )
+    security_other_desc: str | None = Field(
+        default=None, description="Description when security type is 'Other'"
+    )
+    number_of_securities: int | None = Field(
+        default=None, description="Number of securities offered"
+    )
+    price: float | None = Field(
+        default=None, description="Price per security, in dollars"
+    )
+    price_determination_method: str | None = Field(
+        default=None,
+        description="How the price was determined (often reveals valuation)",
+    )
+    target_offering_amount: float | None = Field(
+        default=None, description="Target offering amount, in dollars"
+    )
+    max_offering_amount: float | None = Field(
+        default=None, description="Maximum offering amount, in dollars"
+    )
+    oversubscription_accepted: bool | None = Field(
+        default=None, description="Whether oversubscriptions are accepted"
+    )
+    deadline: str | None = Field(
+        default=None, description="Offering deadline (MM-DD-YYYY)"
+    )
+    current_employees: int | None = Field(
+        default=None, description="Number of current employees"
+    )
+
+    financials: FormCFinancials = Field(
+        default_factory=FormCFinancials, description="Two-year financial snapshot"
+    )
+
+
 class Filing(BaseModel):
     """A single filing: its metadata and the documents it contains."""
 
