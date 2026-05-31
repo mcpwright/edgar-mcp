@@ -21,6 +21,7 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 | `get_form_d_details(accession_or_url, cik=None)` | Parse a Form D (Reg D) raise: offering amount, sold/remaining, min investment, # investors, industry, revenue range, security types, exemptions, and the officers/directors/promoters. |
 | `get_form_c_details(accession_or_url, cik=None)` | Parse a Form C (Reg CF) raise: target/max amount, price, security type, deadline, intermediary, employees, and a two-year financial snapshot (revenue, net income, assets, debt). |
 | `get_company_facts(cik_or_query)` | Headline financials from a public company's XBRL facts: latest annual revenue, gross/operating income, net income, assets, liabilities, equity, cash. |
+| `get_filing_text(url, offset=0, max_chars=20000)` | Fetch a document's text (HTML stripped) for reading/summarizing — paginated, since filings can exceed 1M characters. |
 
 ## Install
 
@@ -72,7 +73,7 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [x] State filter on `get_recent_offerings` (industry isn't filterable — EDGAR omits SIC on these listings; screen via `get_form_d_details.industry_group`)
 - [x] Reg A (Form 1-A) support in `get_recent_offerings`
 - [x] `get_company_facts(cik)` — XBRL headline financials
-- [ ] `get_filing_text` — return a document's text for summarization
+- [x] `get_filing_text` — return a document's text for summarization
 - [ ] Publish to PyPI + the official MCP Registry
 
 Contributions and issues welcome.

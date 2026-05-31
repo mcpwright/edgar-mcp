@@ -287,6 +287,16 @@ class CompanyFacts(BaseModel):
     )
 
 
+class FilingText(BaseModel):
+    """The (optionally paginated) text of a single filing document."""
+
+    url: str = Field(description="Document URL")
+    text: str = Field(description="Document text (HTML stripped), for this page")
+    total_chars: int = Field(description="Total length of the full document text")
+    offset: int = Field(description="Character offset this page starts at")
+    truncated: bool = Field(description="True if more text remains past this page")
+
+
 class Filing(BaseModel):
     """A single filing: its metadata and the documents it contains."""
 
