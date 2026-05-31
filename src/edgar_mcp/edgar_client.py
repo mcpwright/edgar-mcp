@@ -15,9 +15,11 @@ import asyncio
 import os
 import re
 import time
-from typing import Any
+from typing import Any, cast
 
 import httpx
+
+from .cache import TTLCache
 
 # --- Public SEC endpoints ---------------------------------------------------
 TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -37,6 +39,27 @@ DEFAULT_USER_AGENT = os.environ.get(
 
 # The SEC asks consumers to stay at or under 10 req/s; ~8 req/s leaves headroom.
 _MIN_INTERVAL = 1.0 / 8
+
+# Cache TTLs (seconds), chosen by how volatile each endpoint is.
+_TTL_IMMUTABLE = 7 * 24 * 3600  # filing-archive content never changes per accession
+_TTL_TICKERS = 24 * 3600  # the ticker map changes rarely
+_TTL_DEFAULT = 600  # submissions / facts / search — fresh-ish, but worth deduping
+
+
+def _cache_key(url: str, params: dict[str, Any] | None) -> str:
+    if not params:
+        return url
+    query = "&".join(f"{k}={params[k]}" for k in sorted(params))
+    return f"{url}?{query}"
+
+
+def _ttl_for(url: str) -> float:
+    """How long a response for this URL may be cached."""
+    if "/Archives/edgar/data/" in url:
+        return _TTL_IMMUTABLE
+    if url == TICKERS_EXCHANGE_URL:
+        return _TTL_TICKERS
+    return _TTL_DEFAULT
 
 
 class EdgarError(RuntimeError):
@@ -71,7 +94,11 @@ class EdgarClient:
     """Thin async wrapper over the SEC's public JSON endpoints."""
 
     def __init__(
-        self, user_agent: str = DEFAULT_USER_AGENT, *, max_retries: int = 3
+        self,
+        user_agent: str = DEFAULT_USER_AGENT,
+        *,
+        max_retries: int = 3,
+        cache: bool = True,
     ) -> None:
         self._client = httpx.AsyncClient(
             headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
@@ -80,6 +107,9 @@ class EdgarClient:
         )
         self._limiter = _RateLimiter()
         self._max_retries = max_retries
+        # On by default; set EDGAR_MCP_CACHE=0 to disable.
+        enabled = cache and os.environ.get("EDGAR_MCP_CACHE", "1") not in ("0", "false")
+        self._cache: TTLCache | None = TTLCache() if enabled else None
 
     async def __aenter__(self) -> EdgarClient:
         return self
@@ -120,15 +150,30 @@ class EdgarClient:
     async def get_json(
         self, url: str, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """GET a URL and parse the JSON body."""
+        """GET a URL and parse the JSON body (cached per TTL policy)."""
+        key = f"json:{_cache_key(url, params)}"
+        if self._cache is not None:
+            hit, value = await self._cache.get(key)
+            if hit:
+                return cast("dict[str, Any]", value)
         resp = await self._request(url, params)
         data: dict[str, Any] = resp.json()
+        if self._cache is not None:
+            await self._cache.set(key, data, _ttl_for(url), size=len(resp.content))
         return data
 
     async def get_text(self, url: str, params: dict[str, Any] | None = None) -> str:
-        """GET a URL and return the raw text body."""
+        """GET a URL and return the raw text body (cached per TTL policy)."""
+        key = f"text:{_cache_key(url, params)}"
+        if self._cache is not None:
+            hit, value = await self._cache.get(key)
+            if hit:
+                return cast("str", value)
         resp = await self._request(url, params)
-        return resp.text
+        text = resp.text
+        if self._cache is not None:
+            await self._cache.set(key, text, _ttl_for(url), size=len(text))
+        return text
 
     # --- typed endpoint helpers --------------------------------------------
     async def company_tickers_exchange(self) -> dict[str, Any]:
