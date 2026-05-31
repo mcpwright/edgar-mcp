@@ -86,12 +86,12 @@ def test_parse_form_c_rejects_non_form_c() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_form_c_details_tool() -> None:
+async def test_get_form_c_details_tool(ctx) -> None:
     base = "https://www.sec.gov/Archives/edgar/data/2136568/000213656826000001"
     respx.get(f"{base}/primary_doc.xml").mock(
         return_value=httpx.Response(200, text=_FORM_C_XML)
     )
-    c = await server.get_form_c_details(f"{base}/primary_doc.xml")
+    c = await server.get_form_c_details(f"{base}/primary_doc.xml", ctx)
     assert c.cik == "0002136568"
     assert c.target_offering_amount == 50_000.0
     assert c.max_offering_amount == 124_000.0

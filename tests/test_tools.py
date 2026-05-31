@@ -46,11 +46,11 @@ _EFTS_FORM_C = {
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_recent_offerings_form_c() -> None:
+async def test_get_recent_offerings_form_c(ctx) -> None:
     respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
     )
-    offerings = await server.get_recent_offerings("C", limit=5)
+    offerings = await server.get_recent_offerings(ctx, "C", limit=5)
 
     assert len(offerings) == 1
     o = offerings[0]
@@ -63,28 +63,28 @@ async def test_get_recent_offerings_form_c() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_recent_offerings_rejects_bad_form() -> None:
+async def test_get_recent_offerings_rejects_bad_form(ctx) -> None:
     with pytest.raises(ValueError):
-        await server.get_recent_offerings("X")
+        await server.get_recent_offerings(ctx, "X")
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_recent_offerings_reg_a_maps_to_1a() -> None:
+async def test_get_recent_offerings_reg_a_maps_to_1a(ctx) -> None:
     route = respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
     )
-    await server.get_recent_offerings("A")
+    await server.get_recent_offerings(ctx, "A")
     assert route.calls.last.request.url.params["forms"] == "1-A"
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_recent_offerings_state_filter() -> None:
+async def test_get_recent_offerings_state_filter(ctx) -> None:
     route = respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
     )
-    await server.get_recent_offerings("D", state="ca")
+    await server.get_recent_offerings(ctx, "D", state="ca")
     params = route.calls.last.request.url.params
     assert params["forms"] == "D"
     assert params["locationCodes"] == "CA"  # normalized to upper-case
@@ -114,7 +114,7 @@ _SUBMISSIONS = {
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_filing_by_url() -> None:
+async def test_get_filing_by_url(ctx) -> None:
     respx.get(f"{_FILING_BASE}/index.json").mock(
         return_value=httpx.Response(200, json=_INDEX_JSON)
     )
@@ -122,7 +122,7 @@ async def test_get_filing_by_url() -> None:
         return_value=httpx.Response(200, json=_SUBMISSIONS)
     )
 
-    filing = await server.get_filing(f"{_FILING_BASE}/aapl-20230930.htm")
+    filing = await server.get_filing(f"{_FILING_BASE}/aapl-20230930.htm", ctx)
 
     assert filing.cik == "0000320193"
     assert filing.accession_no == "0000320193-23-000106"
@@ -137,14 +137,14 @@ async def test_get_filing_by_url() -> None:
 
 
 @pytest.mark.asyncio
-async def test_get_filing_bare_accession_needs_cik() -> None:
+async def test_get_filing_bare_accession_needs_cik(ctx) -> None:
     with pytest.raises(ValueError):
-        await server.get_filing("0000320193-23-000106")
+        await server.get_filing("0000320193-23-000106", ctx)
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_lookup_issuer_private_company_fallback() -> None:
+async def test_lookup_issuer_private_company_fallback(ctx) -> None:
     # Not in the ticker map -> falls back to EDGAR company search + name lookup.
     respx.get(TICKERS_EXCHANGE_URL).mock(
         return_value=httpx.Response(200, json=_EMPTY_TICKERS)
@@ -156,7 +156,7 @@ async def test_lookup_issuer_private_company_fallback() -> None:
         ]
     )
 
-    issuers = await server.lookup_issuer("StartEngine")
+    issuers = await server.lookup_issuer("StartEngine", ctx)
 
     assert len(issuers) == 1
     assert issuers[0].cik == "0001661779"
@@ -165,7 +165,7 @@ async def test_lookup_issuer_private_company_fallback() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_list_filings_resolves_private_company_name() -> None:
+async def test_list_filings_resolves_private_company_name(ctx) -> None:
     respx.get(TICKERS_EXCHANGE_URL).mock(
         return_value=httpx.Response(200, json=_EMPTY_TICKERS)
     )
@@ -189,7 +189,7 @@ async def test_list_filings_resolves_private_company_name() -> None:
         )
     )
 
-    filings = await server.list_filings("StartEngine", limit=5)
+    filings = await server.list_filings("StartEngine", ctx, limit=5)
 
     assert filings
     assert filings[0].issuer.startswith("STARTENGINE")
@@ -198,11 +198,11 @@ async def test_list_filings_resolves_private_company_name() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_recent_offerings_lowercase_form_ok() -> None:
+async def test_get_recent_offerings_lowercase_form_ok(ctx) -> None:
     route = respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
     )
-    await server.get_recent_offerings("c")
+    await server.get_recent_offerings(ctx, "c")
     # "c" should be normalized to "C" and sent as the forms filter
     assert route.called
     assert route.calls.last.request.url.params["forms"] == "C"

@@ -6,10 +6,13 @@ read-only and hit public SEC endpoints (no API key required).
 
 from __future__ import annotations
 
-from typing import Any
+from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+from dataclasses import dataclass
+from typing import Any, cast
 from urllib.parse import urlparse
 
-from mcp.server.fastmcp import FastMCP
+from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
 from .edgar_client import EdgarClient, EdgarError, pad_cik
@@ -35,20 +38,54 @@ from .models import (
 )
 from .xbrl import extract_company_facts
 
-mcp = FastMCP("edgar")
+_INSTRUCTIONS = """\
+Read-only access to U.S. SEC EDGAR filings and company data (no API key).
+
+Typical flow:
+- Resolve a company first with `lookup_issuer` (name or ticker; works for both
+  public and private/non-exchange filers). Use the returned 10-digit CIK with
+  the other tools. If several issuers match, ask the user which one they mean.
+- Discover raises with `get_recent_offerings` (form "C"=Reg CF, "D"=Reg D,
+  "A"=Reg A; optional `state` filter), then screen one with `get_form_d_details`
+  or `get_form_c_details` for the actual economics.
+- `list_filings` for an issuer's filing history; `search_filings` for full-text.
+- `get_filing` lists a filing's documents; pass a document URL to
+  `get_filing_text` to read/summarize it (paginated — filings can be huge).
+- `get_company_facts` returns XBRL headline financials for public reporting
+  companies (most private issuers have none — use the Form C/D tools there).
+
+Monetary amounts are USD. Dates are ISO (YYYY-MM-DD) except Form C fields,
+which the SEC formats MM-DD-YYYY.
+"""
+
+
+@dataclass
+class AppContext:
+    """Resources shared across requests for the lifetime of the server."""
+
+    edgar: EdgarClient
+
+
+@asynccontextmanager
+async def _lifespan(_server: FastMCP) -> AsyncIterator[AppContext]:
+    """Own the EDGAR HTTP client: create on startup, close on shutdown."""
+    edgar = EdgarClient()
+    try:
+        yield AppContext(edgar=edgar)
+    finally:
+        await edgar.aclose()
+
+
+mcp = FastMCP("edgar", instructions=_INSTRUCTIONS, lifespan=_lifespan)
 
 # Tools only read public data and reach out to the open web.
 _READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
 
-# Shared client, created lazily on first use.
-_client: EdgarClient | None = None
 
-
-def _edgar() -> EdgarClient:
-    global _client
-    if _client is None:
-        _client = EdgarClient()
-    return _client
+def _edgar(ctx: Context) -> EdgarClient:
+    """The shared EDGAR client from the lifespan context."""
+    app = cast(AppContext, ctx.request_context.lifespan_context)
+    return app.edgar
 
 
 def _issuers_from_map(data: dict[str, Any], query: str, limit: int) -> list[Issuer]:
@@ -84,25 +121,25 @@ def _issuers_from_map(data: dict[str, Any], query: str, limit: int) -> list[Issu
     return (exact + partial)[:limit]
 
 
-async def _resolve_cik(cik_or_query: str) -> str:
+async def _resolve_cik(edgar: EdgarClient, cik_or_query: str) -> str:
     """Accept a raw CIK or a name/ticker; return a 10-digit CIK."""
     s = cik_or_query.strip().upper().removeprefix("CIK").strip()
     if s.isdigit():
         return pad_cik(s)
     matches = _issuers_from_map(
-        await _edgar().company_tickers_exchange(), cik_or_query, limit=1
+        await edgar.company_tickers_exchange(), cik_or_query, limit=1
     )
     if matches:
         return matches[0].cik
     # Fall back to EDGAR's company search (covers private / non-exchange filers).
-    ciks = await _edgar().search_company_ciks(cik_or_query, limit=1)
+    ciks = await edgar.search_company_ciks(cik_or_query, limit=1)
     if ciks:
         return ciks[0]
     raise ValueError(f"No issuer found matching {cik_or_query!r}")
 
 
 @mcp.tool(annotations=_READ_ONLY)
-async def lookup_issuer(query: str, limit: int = 10) -> list[Issuer]:
+async def lookup_issuer(query: str, ctx: Context, limit: int = 10) -> list[Issuer]:
     """Resolve a company name or ticker to its SEC CIK and basic identity.
 
     `query`: a ticker (e.g. "AAPL") or part of a company name (e.g. "Apple" or
@@ -111,29 +148,29 @@ async def lookup_issuer(query: str, limit: int = 10) -> list[Issuer]:
     with their 10-digit CIK, legal name, tickers, and exchange. Resolve a CIK
     here first — the other tools key off it.
     """
-    data = await _edgar().company_tickers_exchange()
+    edgar = _edgar(ctx)
+    data = await edgar.company_tickers_exchange()
     matches = _issuers_from_map(data, query, limit)
     if matches:
         return matches
     # Not in the (exchange-only) ticker map — fall back to EDGAR's company
     # search, which includes private / non-exchange filers.
-    ciks = await _edgar().search_company_ciks(query, limit)
-    return [
-        Issuer(cik=cik, name=await _edgar().company_name(cik) or "") for cik in ciks
-    ]
+    ciks = await edgar.search_company_ciks(query, limit)
+    return [Issuer(cik=cik, name=await edgar.company_name(cik) or "") for cik in ciks]
 
 
 @mcp.tool(annotations=_READ_ONLY)
 async def list_filings(
-    cik_or_query: str, form_type: str | None = None, limit: int = 20
+    cik_or_query: str, ctx: Context, form_type: str | None = None, limit: int = 20
 ) -> list[FilingHit]:
     """List the most recent filings for one issuer, newest first.
 
     `cik_or_query`: a CIK (digits) or a ticker/name to resolve.
     `form_type`: optional prefix filter, e.g. "10-K", "8-K", "C", "D".
     """
-    cik = await _resolve_cik(cik_or_query)
-    sub = await _edgar().submissions(cik)
+    edgar = _edgar(ctx)
+    cik = await _resolve_cik(edgar, cik_or_query)
+    sub = await edgar.submissions(cik)
     recent = sub["filings"]["recent"]
     name = sub.get("name", "")
 
@@ -165,6 +202,7 @@ async def list_filings(
 @mcp.tool(annotations=_READ_ONLY)
 async def search_filings(
     query: str,
+    ctx: Context,
     forms: list[str] | None = None,
     date_from: str | None = None,
     date_to: str | None = None,
@@ -176,7 +214,7 @@ async def search_filings(
     `forms`: optional list of form types to restrict to, e.g. ["10-K", "8-K"].
     `date_from` / `date_to`: ISO dates (YYYY-MM-DD).
     """
-    data = await _edgar().full_text_search(
+    data = await _edgar(ctx).full_text_search(
         query, forms=forms, date_from=date_from, date_to=date_to
     )
     hits = data.get("hits", {}).get("hits", [])
@@ -185,6 +223,7 @@ async def search_filings(
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_recent_offerings(
+    ctx: Context,
     form: str = "C",
     since: str | None = None,
     state: str | None = None,
@@ -208,7 +247,7 @@ async def get_recent_offerings(
     f = form.strip().upper()
     if f not in forms_by_regime:
         raise ValueError('form must be "C" (Reg CF), "D" (Reg D), or "A" (Reg A)')
-    data = await _edgar().full_text_search(
+    data = await _edgar(ctx).full_text_search(
         forms=[forms_by_regime[f]],
         date_from=since,
         location=state.strip().upper() if state else None,
@@ -218,7 +257,9 @@ async def get_recent_offerings(
 
 
 @mcp.tool(annotations=_READ_ONLY)
-async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
+async def get_filing(
+    accession_or_url: str, ctx: Context, cik: str | None = None
+) -> Filing:
     """Open one filing: its metadata and the documents it contains.
 
     `accession_or_url`: a filing `url` returned by another tool, OR an accession
@@ -226,11 +267,12 @@ async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
     `cik`. Returns the form, filing date, a link to the primary document, and
     every document in the filing with its URL.
     """
+    edgar = _edgar(ctx)
     resolved_cik, accession = parse_filing_ref(accession_or_url, cik)
     base = filing_dir_url(resolved_cik, accession)
 
     # Document list from the filing's archive directory.
-    index = await _edgar().get_json(f"{base}/index.json")
+    index = await edgar.get_json(f"{base}/index.json")
     items = index.get("directory", {}).get("item", [])
     documents = [
         FilingDocument(
@@ -246,7 +288,7 @@ async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
     # and we still return the document list.
     form = filed = primary_doc = primary_desc = None
     try:
-        recent = (await _edgar().submissions(resolved_cik))["filings"]["recent"]
+        recent = (await edgar.submissions(resolved_cik))["filings"]["recent"]
         idx = recent["accessionNumber"].index(accession)
         form = recent["form"][idx]
         filed = recent["filingDate"][idx]
@@ -270,7 +312,7 @@ async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_form_d_details(
-    accession_or_url: str, cik: str | None = None
+    accession_or_url: str, ctx: Context, cik: str | None = None
 ) -> FormDDetails:
     """Parse a Form D (Reg D) filing's structured offering data.
 
@@ -285,7 +327,7 @@ async def get_form_d_details(
     resolved_cik, accession = parse_filing_ref(accession_or_url, cik)
     base = filing_dir_url(resolved_cik, accession)
     try:
-        xml_text = await _edgar().get_text(f"{base}/primary_doc.xml")
+        xml_text = await _edgar(ctx).get_text(f"{base}/primary_doc.xml")
     except EdgarError as exc:
         raise ValueError(
             "Could not load the Form D document for this filing — "
@@ -301,7 +343,7 @@ async def get_form_d_details(
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_form_c_details(
-    accession_or_url: str, cik: str | None = None
+    accession_or_url: str, ctx: Context, cik: str | None = None
 ) -> FormCDetails:
     """Parse a Form C (Reg CF crowdfunding) filing's structured data.
 
@@ -316,7 +358,7 @@ async def get_form_c_details(
     resolved_cik, accession = parse_filing_ref(accession_or_url, cik)
     base = filing_dir_url(resolved_cik, accession)
     try:
-        xml_text = await _edgar().get_text(f"{base}/primary_doc.xml")
+        xml_text = await _edgar(ctx).get_text(f"{base}/primary_doc.xml")
     except EdgarError as exc:
         raise ValueError(
             "Could not load the Form C document for this filing — "
@@ -331,7 +373,7 @@ async def get_form_c_details(
 
 
 @mcp.tool(annotations=_READ_ONLY)
-async def get_company_facts(cik_or_query: str) -> CompanyFacts:
+async def get_company_facts(cik_or_query: str, ctx: Context) -> CompanyFacts:
     """Headline financials for a public reporting company, from its XBRL facts.
 
     Returns the latest annual values for revenue, gross profit, operating
@@ -342,9 +384,10 @@ async def get_company_facts(cik_or_query: str) -> CompanyFacts:
     private Reg CF / Reg D issuers do not; use `get_form_c_details` /
     `get_form_d_details` for those instead.
     """
-    cik = await _resolve_cik(cik_or_query)
+    edgar = _edgar(ctx)
+    cik = await _resolve_cik(edgar, cik_or_query)
     try:
-        data = await _edgar().company_facts(cik)
+        data = await edgar.company_facts(cik)
     except EdgarError as exc:
         raise ValueError(
             "No XBRL financial data for this issuer — only public reporting "
@@ -356,7 +399,7 @@ async def get_company_facts(cik_or_query: str) -> CompanyFacts:
 
 @mcp.tool(annotations=_READ_ONLY)
 async def get_filing_text(
-    url: str, offset: int = 0, max_chars: int = 20000
+    url: str, ctx: Context, offset: int = 0, max_chars: int = 20000
 ) -> FilingText:
     """Fetch a filing document's text — for reading or summarizing it.
 
@@ -369,7 +412,7 @@ async def get_filing_text(
     if not (host == "sec.gov" or host.endswith(".sec.gov")):
         raise ValueError("url must be an SEC (sec.gov) document URL")
 
-    raw = await _edgar().get_text(url)
+    raw = await _edgar(ctx).get_text(url)
     text = html_to_text(raw) if url.lower().endswith((".htm", ".html")) else raw
 
     total = len(text)
