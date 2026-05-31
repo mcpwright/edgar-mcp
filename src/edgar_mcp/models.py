@@ -46,3 +46,30 @@ class Offering(BaseModel):
     filed: str = Field(description="Filing date, YYYY-MM-DD")
     accession_no: str = Field(description="SEC accession number")
     url: str | None = Field(default=None, description="Link to the filing")
+
+
+class FilingDocument(BaseModel):
+    """A single document contained within a filing."""
+
+    name: str = Field(description="File name within the filing")
+    url: str = Field(description="Direct link to the document")
+    size: int | None = Field(default=None, description="Size in bytes, if reported")
+
+
+class Filing(BaseModel):
+    """A single filing: its metadata and the documents it contains."""
+
+    cik: str = Field(description="10-digit CIK of the filer")
+    accession_no: str = Field(description="SEC accession number")
+    form: str | None = Field(default=None, description="Form type, e.g. 10-K, C, D")
+    filed: str | None = Field(default=None, description="Filing date, YYYY-MM-DD")
+    primary_document: str | None = Field(
+        default=None, description="Link to the filing's main document"
+    )
+    primary_doc_description: str | None = Field(
+        default=None, description="Description of the primary document"
+    )
+    index_url: str = Field(description="Link to the filing's index page")
+    documents: list[FilingDocument] = Field(
+        default_factory=list, description="All documents in the filing"
+    )

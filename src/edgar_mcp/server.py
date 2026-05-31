@@ -11,9 +11,14 @@ from typing import Any
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
 
-from .edgar_client import EdgarClient, pad_cik
-from .formatting import build_filing_url, filing_fields_from_efts
-from .models import FilingHit, Issuer, Offering
+from .edgar_client import EdgarClient, EdgarError, pad_cik
+from .formatting import (
+    build_filing_url,
+    filing_dir_url,
+    filing_fields_from_efts,
+    parse_filing_ref,
+)
+from .models import Filing, FilingDocument, FilingHit, Issuer, Offering
 
 mcp = FastMCP("edgar")
 
@@ -166,6 +171,57 @@ async def get_recent_offerings(
     data = await _edgar().full_text_search(forms=[f], date_from=since)
     hits = data.get("hits", {}).get("hits", [])
     return [Offering(**filing_fields_from_efts(h)) for h in hits[:limit]]
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
+    """Open one filing: its metadata and the documents it contains.
+
+    `accession_or_url`: a filing `url` returned by another tool, OR an accession
+    number (e.g. "0000320193-23-000106"). With a bare accession number, also pass
+    `cik`. Returns the form, filing date, a link to the primary document, and
+    every document in the filing with its URL.
+    """
+    resolved_cik, accession = parse_filing_ref(accession_or_url, cik)
+    base = filing_dir_url(resolved_cik, accession)
+
+    # Document list from the filing's archive directory.
+    index = await _edgar().get_json(f"{base}/index.json")
+    items = index.get("directory", {}).get("item", [])
+    documents = [
+        FilingDocument(
+            name=it["name"],
+            url=f"{base}/{it['name']}",
+            size=int(it["size"]) if str(it.get("size") or "").isdigit() else None,
+        )
+        for it in items
+    ]
+
+    # Metadata + primary document from the issuer's submissions history. Only
+    # the most recent filings are in `recent`; for older ones this is skipped
+    # and we still return the document list.
+    form = filed = primary_doc = primary_desc = None
+    try:
+        recent = (await _edgar().submissions(resolved_cik))["filings"]["recent"]
+        idx = recent["accessionNumber"].index(accession)
+        form = recent["form"][idx]
+        filed = recent["filingDate"][idx]
+        primary_desc = recent["primaryDocDescription"][idx] or None
+        pdoc = recent["primaryDocument"][idx]
+        primary_doc = f"{base}/{pdoc}" if pdoc else None
+    except (EdgarError, ValueError, KeyError):
+        pass
+
+    return Filing(
+        cik=resolved_cik,
+        accession_no=accession,
+        form=form,
+        filed=filed,
+        primary_document=primary_doc,
+        primary_doc_description=primary_desc,
+        index_url=f"{base}/{accession}-index.htm",
+        documents=documents,
+    )
 
 
 def main() -> None:
