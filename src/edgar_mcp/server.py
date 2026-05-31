@@ -21,6 +21,7 @@ from .formatting import (
 from .formc import parse_form_c
 from .formd import parse_form_d
 from .models import (
+    CompanyFacts,
     Filing,
     FilingDocument,
     FilingHit,
@@ -29,6 +30,7 @@ from .models import (
     Issuer,
     Offering,
 )
+from .xbrl import extract_company_facts
 
 mcp = FastMCP("edgar")
 
@@ -187,8 +189,9 @@ async def get_recent_offerings(
 ) -> list[Offering]:
     """List recent securities offerings filed with the SEC, newest first.
 
-    `form`: "C" for Regulation Crowdfunding (the Form C family — C, C/A, C-U,
-    C-AR, …) or "D" for Regulation D (the Form D family — D, D/A).
+    `form`: "C" for Regulation Crowdfunding (Form C family — C, C/A, C-U, C-AR),
+    "D" for Regulation D (Form D family — D, D/A), or "A" for Regulation A
+    (Form 1-A family — 1-A, 1-A/A, 1-A POS).
     `since`: optional ISO date (YYYY-MM-DD) lower bound on the filing date.
     `state`: optional 2-letter US state code (e.g. "CA") filtering on the
     issuer's principal place of business; comma-separate for several.
@@ -198,11 +201,12 @@ async def get_recent_offerings(
     code on these listings. To screen by industry, open a result with
     `get_form_d_details` (its `industry_group`) or `get_form_c_details`.
     """
+    forms_by_regime = {"C": "C", "D": "D", "A": "1-A"}
     f = form.strip().upper()
-    if f not in ("C", "D"):
-        raise ValueError('form must be "C" (Reg CF) or "D" (Reg D)')
+    if f not in forms_by_regime:
+        raise ValueError('form must be "C" (Reg CF), "D" (Reg D), or "A" (Reg A)')
     data = await _edgar().full_text_search(
-        forms=[f],
+        forms=[forms_by_regime[f]],
         date_from=since,
         location=state.strip().upper() if state else None,
     )
@@ -321,6 +325,30 @@ async def get_form_c_details(
         accession_no=accession,
         url=f"{base}/{accession}-index.htm",
     )
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_company_facts(cik_or_query: str) -> CompanyFacts:
+    """Headline financials for a public reporting company, from its XBRL facts.
+
+    Returns the latest annual values for revenue, gross profit, operating
+    income, net income, total assets, liabilities, stockholders' equity, and
+    cash. `cik_or_query`: a CIK or a name/ticker to resolve.
+
+    Only companies that file XBRL (public reporting companies) have this — most
+    private Reg CF / Reg D issuers do not; use `get_form_c_details` /
+    `get_form_d_details` for those instead.
+    """
+    cik = await _resolve_cik(cik_or_query)
+    try:
+        data = await _edgar().company_facts(cik)
+    except EdgarError as exc:
+        raise ValueError(
+            "No XBRL financial data for this issuer — only public reporting "
+            "companies have it. For a private raise, try get_form_c_details / "
+            "get_form_d_details."
+        ) from exc
+    return extract_company_facts(data, cik=cik)
 
 
 def main() -> None:
