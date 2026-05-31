@@ -7,6 +7,7 @@ read-only and hit public SEC endpoints (no API key required).
 from __future__ import annotations
 
 from typing import Any
+from urllib.parse import urlparse
 
 from mcp.server.fastmcp import FastMCP
 from mcp.types import ToolAnnotations
@@ -20,11 +21,13 @@ from .formatting import (
 )
 from .formc import parse_form_c
 from .formd import parse_form_d
+from .htmltext import html_to_text
 from .models import (
     CompanyFacts,
     Filing,
     FilingDocument,
     FilingHit,
+    FilingText,
     FormCDetails,
     FormDDetails,
     Issuer,
@@ -349,6 +352,36 @@ async def get_company_facts(cik_or_query: str) -> CompanyFacts:
             "get_form_d_details."
         ) from exc
     return extract_company_facts(data, cik=cik)
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_filing_text(
+    url: str, offset: int = 0, max_chars: int = 20000
+) -> FilingText:
+    """Fetch a filing document's text — for reading or summarizing it.
+
+    `url`: a document URL from `get_filing` (its `documents` / `primary_document`).
+    HTML documents are stripped to plain text. Filings are large (a 10-K can be
+    over a million characters), so the result is paginated: pass `offset` and
+    `max_chars` to page through. `truncated` indicates more text remains.
+    """
+    host = urlparse(url).hostname or ""
+    if not (host == "sec.gov" or host.endswith(".sec.gov")):
+        raise ValueError("url must be an SEC (sec.gov) document URL")
+
+    raw = await _edgar().get_text(url)
+    text = html_to_text(raw) if url.lower().endswith((".htm", ".html")) else raw
+
+    total = len(text)
+    offset = max(0, offset)
+    page = text[offset : offset + max_chars] if max_chars > 0 else text[offset:]
+    return FilingText(
+        url=url,
+        text=page,
+        total_chars=total,
+        offset=offset,
+        truncated=offset + len(page) < total,
+    )
 
 
 def main() -> None:
