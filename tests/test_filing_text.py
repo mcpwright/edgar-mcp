@@ -27,23 +27,23 @@ def test_html_to_text_strips_tags_and_scripts() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_filing_text_paginates() -> None:
+async def test_get_filing_text_paginates(ctx) -> None:
     url = "https://www.sec.gov/Archives/edgar/data/320193/x/doc.htm"
     respx.get(url).mock(
         return_value=httpx.Response(200, text="<p>" + "A" * 50 + "</p>")
     )
 
-    page1 = await server.get_filing_text(url, offset=0, max_chars=20)
+    page1 = await server.get_filing_text(url, ctx, offset=0, max_chars=20)
     assert page1.total_chars == 50
     assert len(page1.text) == 20
     assert page1.truncated is True
 
-    page2 = await server.get_filing_text(url, offset=40, max_chars=20)
+    page2 = await server.get_filing_text(url, ctx, offset=40, max_chars=20)
     assert len(page2.text) == 10
     assert page2.truncated is False
 
 
 @pytest.mark.asyncio
-async def test_get_filing_text_rejects_non_sec_url() -> None:
+async def test_get_filing_text_rejects_non_sec_url(ctx) -> None:
     with pytest.raises(ValueError):
-        await server.get_filing_text("https://evil.example.com/x.htm")
+        await server.get_filing_text("https://evil.example.com/x.htm", ctx)

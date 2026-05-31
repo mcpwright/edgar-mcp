@@ -3,7 +3,7 @@ import pytest
 import respx
 
 from edgar_mcp import server
-from edgar_mcp.edgar_client import COMPANYFACTS_URL, TICKERS_EXCHANGE_URL
+from edgar_mcp.edgar_client import COMPANYFACTS_URL
 from edgar_mcp.xbrl import extract_company_facts
 
 _FACTS = {
@@ -67,20 +67,20 @@ def test_extract_company_facts_latest_annual() -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_company_facts_tool() -> None:
+async def test_get_company_facts_tool(ctx) -> None:
     respx.get(COMPANYFACTS_URL.format(cik="0000320193")).mock(
         return_value=httpx.Response(200, json=_FACTS)
     )
-    cf = await server.get_company_facts("320193")  # numeric CIK -> no ticker lookup
+    cf = await server.get_company_facts("320193", ctx)  # numeric CIK -> no lookup
     assert cf.cik == "0000320193"
     assert any(f.label == "Revenue" and f.value == 416.0 for f in cf.facts)
 
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_company_facts_missing_xbrl_raises() -> None:
+async def test_get_company_facts_missing_xbrl_raises(ctx) -> None:
     respx.get(COMPANYFACTS_URL.format(cik="0009999999")).mock(
         return_value=httpx.Response(404)
     )
     with pytest.raises(ValueError):
-        await server.get_company_facts("9999999")
+        await server.get_company_facts("9999999", ctx)
