@@ -9,13 +9,13 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import Any, cast
+from typing import cast
 from urllib.parse import urlparse
 
 from mcp.server.fastmcp import Context, FastMCP
 from mcp.types import ToolAnnotations
 
-from .edgar_client import EdgarClient, EdgarError, pad_cik
+from .edgar_client import EdgarClient, EdgarError
 from .formatting import (
     build_filing_url,
     filing_dir_url,
@@ -25,6 +25,7 @@ from .formatting import (
 from .formc import parse_form_c
 from .formd import parse_form_d
 from .htmltext import html_to_text
+from .issuers import lookup_issuers, resolve_cik
 from .models import (
     CompanyFacts,
     Filing,
@@ -88,56 +89,6 @@ def _edgar(ctx: Context) -> EdgarClient:
     return app.edgar
 
 
-def _issuers_from_map(data: dict[str, Any], query: str, limit: int) -> list[Issuer]:
-    """Match a name/ticker query against the company_tickers_exchange map."""
-    fields = data["fields"]
-    ci, ni, ti, ei = (fields.index(f) for f in ("cik", "name", "ticker", "exchange"))
-
-    # One CIK can have several ticker rows — aggregate them.
-    by_cik: dict[str, dict[str, Any]] = {}
-    for row in data["data"]:
-        cik = pad_cik(row[ci])
-        entry = by_cik.setdefault(
-            cik, {"name": row[ni], "tickers": [], "exchange": row[ei]}
-        )
-        ticker = (row[ti] or "").strip()
-        if ticker and ticker not in entry["tickers"]:
-            entry["tickers"].append(ticker)
-        if not entry["exchange"] and row[ei]:
-            entry["exchange"] = row[ei]
-
-    q = query.strip().upper()
-    exact: list[Issuer] = []
-    partial: list[Issuer] = []
-    for cik, e in by_cik.items():
-        issuer = Issuer(
-            cik=cik, name=e["name"], tickers=e["tickers"], exchange=e["exchange"]
-        )
-        if q in (t.upper() for t in e["tickers"]):
-            exact.append(issuer)
-        elif q in e["name"].upper():
-            partial.append(issuer)
-
-    return (exact + partial)[:limit]
-
-
-async def _resolve_cik(edgar: EdgarClient, cik_or_query: str) -> str:
-    """Accept a raw CIK or a name/ticker; return a 10-digit CIK."""
-    s = cik_or_query.strip().upper().removeprefix("CIK").strip()
-    if s.isdigit():
-        return pad_cik(s)
-    matches = _issuers_from_map(
-        await edgar.company_tickers_exchange(), cik_or_query, limit=1
-    )
-    if matches:
-        return matches[0].cik
-    # Fall back to EDGAR's company search (covers private / non-exchange filers).
-    ciks = await edgar.search_company_ciks(cik_or_query, limit=1)
-    if ciks:
-        return ciks[0]
-    raise ValueError(f"No issuer found matching {cik_or_query!r}")
-
-
 @mcp.tool(annotations=_READ_ONLY)
 async def lookup_issuer(query: str, ctx: Context, limit: int = 10) -> list[Issuer]:
     """Resolve a company name or ticker to its SEC CIK and basic identity.
@@ -148,15 +99,7 @@ async def lookup_issuer(query: str, ctx: Context, limit: int = 10) -> list[Issue
     with their 10-digit CIK, legal name, tickers, and exchange. Resolve a CIK
     here first — the other tools key off it.
     """
-    edgar = _edgar(ctx)
-    data = await edgar.company_tickers_exchange()
-    matches = _issuers_from_map(data, query, limit)
-    if matches:
-        return matches
-    # Not in the (exchange-only) ticker map — fall back to EDGAR's company
-    # search, which includes private / non-exchange filers.
-    ciks = await edgar.search_company_ciks(query, limit)
-    return [Issuer(cik=cik, name=await edgar.company_name(cik) or "") for cik in ciks]
+    return await lookup_issuers(_edgar(ctx), query, limit)
 
 
 @mcp.tool(annotations=_READ_ONLY)
@@ -169,7 +112,7 @@ async def list_filings(
     `form_type`: optional prefix filter, e.g. "10-K", "8-K", "C", "D".
     """
     edgar = _edgar(ctx)
-    cik = await _resolve_cik(edgar, cik_or_query)
+    cik = await resolve_cik(edgar, cik_or_query)
     sub = await edgar.submissions(cik)
     recent = sub["filings"]["recent"]
     name = sub.get("name", "")
@@ -385,7 +328,7 @@ async def get_company_facts(cik_or_query: str, ctx: Context) -> CompanyFacts:
     `get_form_d_details` for those instead.
     """
     edgar = _edgar(ctx)
-    cik = await _resolve_cik(edgar, cik_or_query)
+    cik = await resolve_cik(edgar, cik_or_query)
     try:
         data = await edgar.company_facts(cik)
     except EdgarError as exc:

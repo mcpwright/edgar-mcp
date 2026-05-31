@@ -11,6 +11,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from .models import FormCDetails, FormCFinancials
+from .xmlutil import clean, to_bool, to_float, to_int
 
 _NS = {"f": "http://www.sec.gov/edgar/formc"}
 
@@ -24,34 +25,7 @@ def _text(node: ET.Element | None, tag: str) -> str | None:
     if node is None:
         return None
     el = node.find(f".//f:{tag}", _NS)
-    if el is not None and el.text and el.text.strip():
-        return el.text.strip()
-    return None
-
-
-def _float(value: str | None) -> float | None:
-    if value is None:
-        return None
-    try:
-        return float(value.replace(",", "").strip())
-    except ValueError:
-        return None
-
-
-def _int(value: str | None) -> int | None:
-    cleaned = value.replace(",", "").strip() if value else ""
-    return int(cleaned) if cleaned.lstrip("-").isdigit() else None
-
-
-def _bool_yn(value: str | None) -> bool | None:
-    if value is None:
-        return None
-    v = value.strip().upper()
-    if v in ("Y", "YES", "TRUE"):
-        return True
-    if v in ("N", "NO", "FALSE"):
-        return False
-    return None
+    return clean(el.text) if el is not None else None
 
 
 def parse_form_c(
@@ -71,30 +45,34 @@ def parse_form_c(
     annual = root.find(".//f:annualReportDisclosureRequirements", _NS)
 
     financials = FormCFinancials(
-        revenue_recent=_float(_text(annual, "revenueMostRecentFiscalYear")),
-        revenue_prior=_float(_text(annual, "revenuePriorFiscalYear")),
-        net_income_recent=_float(_text(annual, "netIncomeMostRecentFiscalYear")),
-        net_income_prior=_float(_text(annual, "netIncomePriorFiscalYear")),
-        total_assets_recent=_float(_text(annual, "totalAssetMostRecentFiscalYear")),
-        total_assets_prior=_float(_text(annual, "totalAssetPriorFiscalYear")),
-        cash_recent=_float(_text(annual, "cashEquiMostRecentFiscalYear")),
-        cash_prior=_float(_text(annual, "cashEquiPriorFiscalYear")),
-        accounts_receivable_recent=_float(
+        revenue_recent=to_float(_text(annual, "revenueMostRecentFiscalYear")),
+        revenue_prior=to_float(_text(annual, "revenuePriorFiscalYear")),
+        net_income_recent=to_float(_text(annual, "netIncomeMostRecentFiscalYear")),
+        net_income_prior=to_float(_text(annual, "netIncomePriorFiscalYear")),
+        total_assets_recent=to_float(_text(annual, "totalAssetMostRecentFiscalYear")),
+        total_assets_prior=to_float(_text(annual, "totalAssetPriorFiscalYear")),
+        cash_recent=to_float(_text(annual, "cashEquiMostRecentFiscalYear")),
+        cash_prior=to_float(_text(annual, "cashEquiPriorFiscalYear")),
+        accounts_receivable_recent=to_float(
             _text(annual, "actReceivedMostRecentFiscalYear")
         ),
-        accounts_receivable_prior=_float(_text(annual, "actReceivedPriorFiscalYear")),
-        short_term_debt_recent=_float(
+        accounts_receivable_prior=to_float(_text(annual, "actReceivedPriorFiscalYear")),
+        short_term_debt_recent=to_float(
             _text(annual, "shortTermDebtMostRecentFiscalYear")
         ),
-        short_term_debt_prior=_float(_text(annual, "shortTermDebtPriorFiscalYear")),
-        long_term_debt_recent=_float(_text(annual, "longTermDebtMostRecentFiscalYear")),
-        long_term_debt_prior=_float(_text(annual, "longTermDebtPriorFiscalYear")),
-        cost_of_goods_sold_recent=_float(
+        short_term_debt_prior=to_float(_text(annual, "shortTermDebtPriorFiscalYear")),
+        long_term_debt_recent=to_float(
+            _text(annual, "longTermDebtMostRecentFiscalYear")
+        ),
+        long_term_debt_prior=to_float(_text(annual, "longTermDebtPriorFiscalYear")),
+        cost_of_goods_sold_recent=to_float(
             _text(annual, "costGoodsSoldMostRecentFiscalYear")
         ),
-        cost_of_goods_sold_prior=_float(_text(annual, "costGoodsSoldPriorFiscalYear")),
-        taxes_paid_recent=_float(_text(annual, "taxPaidMostRecentFiscalYear")),
-        taxes_paid_prior=_float(_text(annual, "taxPaidPriorFiscalYear")),
+        cost_of_goods_sold_prior=to_float(
+            _text(annual, "costGoodsSoldPriorFiscalYear")
+        ),
+        taxes_paid_recent=to_float(_text(annual, "taxPaidMostRecentFiscalYear")),
+        taxes_paid_prior=to_float(_text(annual, "taxPaidPriorFiscalYear")),
     )
 
     return FormCDetails(
@@ -112,13 +90,13 @@ def parse_form_c(
         intermediary_crd=_text(issuer_information, "crdNumber"),
         security_type=_text(offering, "securityOfferedType"),
         security_other_desc=_text(offering, "securityOfferedOtherDesc"),
-        number_of_securities=_int(_text(offering, "noOfSecurityOffered")),
-        price=_float(_text(offering, "price")),
+        number_of_securities=to_int(_text(offering, "noOfSecurityOffered")),
+        price=to_float(_text(offering, "price")),
         price_determination_method=_text(offering, "priceDeterminationMethod"),
-        target_offering_amount=_float(_text(offering, "offeringAmount")),
-        max_offering_amount=_float(_text(offering, "maximumOfferingAmount")),
-        oversubscription_accepted=_bool_yn(_text(offering, "overSubscriptionAccepted")),
+        target_offering_amount=to_float(_text(offering, "offeringAmount")),
+        max_offering_amount=to_float(_text(offering, "maximumOfferingAmount")),
+        oversubscription_accepted=to_bool(_text(offering, "overSubscriptionAccepted")),
         deadline=_text(offering, "deadlineDate"),
-        current_employees=_int(_text(annual, "currentEmployees")),
+        current_employees=to_int(_text(annual, "currentEmployees")),
         financials=financials,
     )

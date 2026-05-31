@@ -11,6 +11,7 @@ from __future__ import annotations
 import xml.etree.ElementTree as ET
 
 from .models import FormDDetails, RelatedPerson
+from .xmlutil import clean, to_bool, to_int
 
 # typesOfSecuritiesOffered boolean flags -> human labels
 _SECURITY_TYPE_LABELS = {
@@ -27,24 +28,7 @@ _SECURITY_TYPE_LABELS = {
 
 def _text(node: ET.Element | None, path: str) -> str | None:
     """findtext that treats empty elements as None."""
-    if node is None:
-        return None
-    value = node.findtext(path)
-    value = value.strip() if value else ""
-    return value or None
-
-
-def _int(value: str | None) -> int | None:
-    """Parse a dollar/count field to int; non-numeric (e.g. 'Indefinite') -> None."""
-    if value and value.replace(",", "").strip().isdigit():
-        return int(value.replace(",", "").strip())
-    return None
-
-
-def _bool(value: str | None) -> bool | None:
-    if value is None:
-        return None
-    return {"true": True, "false": False}.get(value.strip().lower())
+    return clean(node.findtext(path)) if node is not None else None
 
 
 class NotFormDError(ValueError):
@@ -79,7 +63,7 @@ def parse_form_d(
 
     # Date of first sale, or the "yet to occur" flag.
     first_sale = _text(offering, "typeOfFiling/dateOfFirstSale/value")
-    if first_sale is None and _bool(
+    if first_sale is None and to_bool(
         _text(offering, "typeOfFiling/dateOfFirstSale/yetToOccur")
     ):
         first_sale = "Yet to occur"
@@ -104,7 +88,7 @@ def parse_form_d(
         accession_no=accession_no,
         url=url,
         is_amendment=bool(
-            _bool(_text(offering, "typeOfFiling/newOrAmendment/isAmendment"))
+            to_bool(_text(offering, "typeOfFiling/newOrAmendment/isAmendment"))
         ),
         issuer_name=_text(issuer, "entityName") or "",
         entity_type=_text(issuer, "entityType"),
@@ -116,24 +100,28 @@ def parse_form_d(
         security_types=security_types,
         federal_exemptions=exemptions,
         date_of_first_sale=first_sale,
-        more_than_one_year=_bool(_text(offering, "durationOfOffering/moreThanOneYear")),
-        minimum_investment=_int(_text(offering, "minimumInvestmentAccepted")),
-        total_offering_amount=_int(
+        more_than_one_year=to_bool(
+            _text(offering, "durationOfOffering/moreThanOneYear")
+        ),
+        minimum_investment=to_int(_text(offering, "minimumInvestmentAccepted")),
+        total_offering_amount=to_int(
             _text(offering, "offeringSalesAmounts/totalOfferingAmount")
         ),
-        total_amount_sold=_int(_text(offering, "offeringSalesAmounts/totalAmountSold")),
-        total_remaining=_int(_text(offering, "offeringSalesAmounts/totalRemaining")),
-        has_non_accredited_investors=_bool(
+        total_amount_sold=to_int(
+            _text(offering, "offeringSalesAmounts/totalAmountSold")
+        ),
+        total_remaining=to_int(_text(offering, "offeringSalesAmounts/totalRemaining")),
+        has_non_accredited_investors=to_bool(
             _text(offering, "investors/hasNonAccreditedInvestors")
         ),
-        number_non_accredited=_int(
+        number_non_accredited=to_int(
             _text(offering, "investors/numberOfNonAccreditedInvestors")
         ),
-        total_investors=_int(_text(offering, "investors/totalNumberAlreadyInvested")),
-        sales_commissions=_int(
+        total_investors=to_int(_text(offering, "investors/totalNumberAlreadyInvested")),
+        sales_commissions=to_int(
             _text(offering, "salesCommissionsFindersFees/salesCommissions/dollarAmount")
         ),
-        finders_fees=_int(
+        finders_fees=to_int(
             _text(offering, "salesCommissionsFindersFees/findersFees/dollarAmount")
         ),
         related_persons=related_persons,
