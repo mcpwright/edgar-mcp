@@ -68,6 +68,18 @@ async def test_get_recent_offerings_rejects_bad_form() -> None:
         await server.get_recent_offerings("X")
 
 
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_recent_offerings_state_filter() -> None:
+    route = respx.get(FULLTEXT_SEARCH_URL).mock(
+        return_value=httpx.Response(200, json=_EFTS_FORM_C)
+    )
+    await server.get_recent_offerings("D", state="ca")
+    params = route.calls.last.request.url.params
+    assert params["forms"] == "D"
+    assert params["locationCodes"] == "CA"  # normalized to upper-case
+
+
 _FILING_BASE = "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106"
 _INDEX_JSON = {
     "directory": {

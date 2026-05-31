@@ -16,7 +16,7 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 | `lookup_issuer(query, limit=10)` | Resolve a ticker or company name → CIK, legal name, tickers, exchange. Works for exchange-listed **and** private / non-exchange filers (Reg CF / Reg A issuers, funds). |
 | `list_filings(cik_or_query, form_type=None, limit=20)` | An issuer's most recent filings, newest first. Optional form-type filter (e.g. `10-K`, `C`, `D`). |
 | `search_filings(query, forms=None, date_from=None, date_to=None, limit=20)` | Full-text search across filing documents. |
-| `get_recent_offerings(form="C", since=None, limit=20)` | Recent securities offerings, newest first — `form="C"` (Reg CF / Form C family) or `form="D"` (Reg D / Form D family). |
+| `get_recent_offerings(form="C", since=None, state=None, limit=20)` | Recent securities offerings, newest first — `form="C"` (Reg CF) or `form="D"` (Reg D), optionally filtered by issuer `state` (e.g. `"CA"`). |
 | `get_filing(accession_or_url, cik=None)` | Open one filing: form, filing date, primary-document link, and every document in the filing. |
 | `get_form_d_details(accession_or_url, cik=None)` | Parse a Form D (Reg D) raise: offering amount, sold/remaining, min investment, # investors, industry, revenue range, security types, exemptions, and the officers/directors/promoters. |
 | `get_form_c_details(accession_or_url, cik=None)` | Parse a Form C (Reg CF) raise: target/max amount, price, security type, deadline, intermediary, employees, and a two-year financial snapshot (revenue, net income, assets, debt). |
@@ -68,7 +68,7 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [x] `get_filing(accession_or_url)` — open a filing and list its documents
 - [x] `get_form_d_details(...)` — parse Reg D offering data (amount, investors, people)
 - [x] `get_form_c_details(...)` — parse Reg CF offering data (target/max, financials, terms)
-- [ ] Industry / state filters on `get_recent_offerings`
+- [x] State filter on `get_recent_offerings` (industry isn't filterable — EDGAR omits SIC on these listings; screen via `get_form_d_details.industry_group`)
 - [ ] `get_company_facts(cik)` — XBRL financials
 - [ ] Publish to PyPI + the official MCP Registry
 
