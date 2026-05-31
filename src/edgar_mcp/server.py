@@ -77,21 +77,35 @@ async def _resolve_cik(cik_or_query: str) -> str:
     matches = _issuers_from_map(
         await _edgar().company_tickers_exchange(), cik_or_query, limit=1
     )
-    if not matches:
-        raise ValueError(f"No issuer found matching {cik_or_query!r}")
-    return matches[0].cik
+    if matches:
+        return matches[0].cik
+    # Fall back to EDGAR's company search (covers private / non-exchange filers).
+    ciks = await _edgar().search_company_ciks(cik_or_query, limit=1)
+    if ciks:
+        return ciks[0]
+    raise ValueError(f"No issuer found matching {cik_or_query!r}")
 
 
 @mcp.tool(annotations=_READ_ONLY)
 async def lookup_issuer(query: str, limit: int = 10) -> list[Issuer]:
     """Resolve a company name or ticker to its SEC CIK and basic identity.
 
-    `query`: a ticker (e.g. "AAPL") or part of a company name (e.g. "Apple").
-    Returns matching issuers with their 10-digit CIK, legal name, tickers, and
-    exchange. Resolve a CIK here first — the other tools key off it.
+    `query`: a ticker (e.g. "AAPL") or part of a company name (e.g. "Apple" or
+    "StartEngine"). Works for exchange-listed public companies AND private /
+    non-exchange filers (Reg CF / Reg A issuers, funds). Returns matching issuers
+    with their 10-digit CIK, legal name, tickers, and exchange. Resolve a CIK
+    here first — the other tools key off it.
     """
     data = await _edgar().company_tickers_exchange()
-    return _issuers_from_map(data, query, limit)
+    matches = _issuers_from_map(data, query, limit)
+    if matches:
+        return matches
+    # Not in the (exchange-only) ticker map — fall back to EDGAR's company
+    # search, which includes private / non-exchange filers.
+    ciks = await _edgar().search_company_ciks(query, limit)
+    return [
+        Issuer(cik=cik, name=await _edgar().company_name(cik) or "") for cik in ciks
+    ]
 
 
 @mcp.tool(annotations=_READ_ONLY)

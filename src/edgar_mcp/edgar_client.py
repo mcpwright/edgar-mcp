@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import asyncio
 import os
+import re
 import time
 from typing import Any
 
@@ -22,6 +23,11 @@ import httpx
 TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
 SUBMISSIONS_URL = "https://data.sec.gov/submissions/CIK{cik}.json"
 FULLTEXT_SEARCH_URL = "https://efts.sec.gov/LATEST/search-index"
+BROWSE_EDGAR_URL = "https://www.sec.gov/cgi-bin/browse-edgar"
+
+# browse-edgar's company-search Atom feed (used for private/non-exchange filers).
+_CIK_RE = re.compile(r"<cik>(\d+)</cik>")
+_CONFORMED_NAME_RE = re.compile(r"<conformed-name>([^<]+)</conformed-name>")
 
 DEFAULT_USER_AGENT = os.environ.get(
     "EDGAR_MCP_USER_AGENT",
@@ -83,10 +89,10 @@ class EdgarClient:
     async def aclose(self) -> None:
         await self._client.aclose()
 
-    async def get_json(
+    async def _request(
         self, url: str, params: dict[str, Any] | None = None
-    ) -> dict[str, Any]:
-        """GET a URL as JSON, with throttling and retry on transient failures."""
+    ) -> httpx.Response:
+        """GET a URL with throttling and retry on transient failures."""
         last_exc: Exception | None = None
         for attempt in range(self._max_retries):
             await self._limiter.wait()
@@ -104,12 +110,24 @@ class EdgarClient:
                 await asyncio.sleep(2**attempt)
                 continue
             resp.raise_for_status()
-            data: dict[str, Any] = resp.json()
-            return data
+            return resp
 
         raise EdgarError(
             f"SEC request failed after {self._max_retries} attempts: {url}"
         ) from last_exc
+
+    async def get_json(
+        self, url: str, params: dict[str, Any] | None = None
+    ) -> dict[str, Any]:
+        """GET a URL and parse the JSON body."""
+        resp = await self._request(url, params)
+        data: dict[str, Any] = resp.json()
+        return data
+
+    async def get_text(self, url: str, params: dict[str, Any] | None = None) -> str:
+        """GET a URL and return the raw text body."""
+        resp = await self._request(url, params)
+        return resp.text
 
     # --- typed endpoint helpers --------------------------------------------
     async def company_tickers_exchange(self) -> dict[str, Any]:
@@ -145,3 +163,42 @@ class EdgarClient:
         if date_from or date_to:
             params["dateRange"] = "custom"
         return await self.get_json(FULLTEXT_SEARCH_URL, params=params)
+
+    async def search_company_ciks(self, query: str, limit: int = 10) -> list[str]:
+        """Resolve a company name to candidate CIKs via EDGAR's company search.
+
+        Unlike the ticker map, this includes private / non-exchange filers
+        (Reg CF and Reg A issuers, funds, etc.). Returns 10-digit CIKs, in the
+        order EDGAR ranks them.
+        """
+        text = await self.get_text(
+            BROWSE_EDGAR_URL,
+            {
+                "action": "getcompany",
+                "company": query,
+                "type": "",
+                "output": "atom",
+                "count": str(max(limit, 10)),
+            },
+        )
+        seen: list[str] = []
+        for cik in _CIK_RE.findall(text):
+            padded = cik.zfill(10)
+            if padded not in seen:
+                seen.append(padded)
+        return seen[:limit]
+
+    async def company_name(self, cik: str | int) -> str | None:
+        """The canonical (conformed) name for a CIK, or None if not found."""
+        text = await self.get_text(
+            BROWSE_EDGAR_URL,
+            {
+                "action": "getcompany",
+                "CIK": pad_cik(cik),
+                "type": "",
+                "output": "atom",
+                "count": "1",
+            },
+        )
+        m = _CONFORMED_NAME_RE.search(text)
+        return m.group(1) if m else None
