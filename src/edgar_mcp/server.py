@@ -18,7 +18,8 @@ from .formatting import (
     filing_fields_from_efts,
     parse_filing_ref,
 )
-from .models import Filing, FilingDocument, FilingHit, Issuer, Offering
+from .formd import parse_form_d
+from .models import Filing, FilingDocument, FilingHit, FormDDetails, Issuer, Offering
 
 mcp = FastMCP("edgar")
 
@@ -235,6 +236,37 @@ async def get_filing(accession_or_url: str, cik: str | None = None) -> Filing:
         primary_doc_description=primary_desc,
         index_url=f"{base}/{accession}-index.htm",
         documents=documents,
+    )
+
+
+@mcp.tool(annotations=_READ_ONLY)
+async def get_form_d_details(
+    accession_or_url: str, cik: str | None = None
+) -> FormDDetails:
+    """Parse a Form D (Reg D) filing's structured offering data.
+
+    Returns the offering amount, amount sold and remaining, minimum investment,
+    number of investors, industry, revenue range, security types, claimed
+    exemptions, and the officers / directors / promoters behind the raise — the
+    fields you actually screen a private placement on.
+
+    `accession_or_url`: a Form D filing `url` (from `get_recent_offerings` or
+    `list_filings`), or an accession number (then also pass `cik`).
+    """
+    resolved_cik, accession = parse_filing_ref(accession_or_url, cik)
+    base = filing_dir_url(resolved_cik, accession)
+    try:
+        xml_text = await _edgar().get_text(f"{base}/primary_doc.xml")
+    except EdgarError as exc:
+        raise ValueError(
+            "Could not load the Form D document for this filing — "
+            "is it a Form D / D-A offering?"
+        ) from exc
+    return parse_form_d(
+        xml_text,
+        cik=resolved_cik,
+        accession_no=accession,
+        url=f"{base}/{accession}-index.htm",
     )
 
 

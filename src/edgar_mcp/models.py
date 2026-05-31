@@ -56,6 +56,89 @@ class FilingDocument(BaseModel):
     size: int | None = Field(default=None, description="Size in bytes, if reported")
 
 
+class RelatedPerson(BaseModel):
+    """An executive officer, director, or promoter named on a filing."""
+
+    name: str = Field(description="Person's full name")
+    relationships: list[str] = Field(
+        default_factory=list,
+        description="Roles, e.g. Executive Officer, Director, Promoter",
+    )
+
+
+class FormDDetails(BaseModel):
+    """Structured data parsed from a Form D (Reg D) offering filing."""
+
+    cik: str = Field(description="10-digit CIK of the issuer")
+    accession_no: str = Field(description="SEC accession number")
+    url: str | None = Field(default=None, description="Link to the filing index")
+    is_amendment: bool = Field(description="True if this is a Form D/A amendment")
+
+    issuer_name: str = Field(description="Issuer's legal name")
+    entity_type: str | None = Field(
+        default=None, description="e.g. Limited Liability Company"
+    )
+    jurisdiction: str | None = Field(
+        default=None, description="Jurisdiction of incorporation"
+    )
+    year_of_inc: str | None = Field(default=None, description="Year of incorporation")
+
+    industry_group: str | None = Field(default=None, description="Industry group")
+    revenue_range: str | None = Field(default=None, description="Issuer revenue range")
+    net_asset_value_range: str | None = Field(
+        default=None, description="Aggregate net asset value range (funds)"
+    )
+
+    security_types: list[str] = Field(
+        default_factory=list,
+        description="Types of securities offered, e.g. Equity, Debt",
+    )
+    federal_exemptions: list[str] = Field(
+        default_factory=list,
+        description="Claimed federal exemptions/exclusions, e.g. 06b",
+    )
+    date_of_first_sale: str | None = Field(
+        default=None, description="Date of first sale (YYYY-MM-DD) or 'Yet to occur'"
+    )
+    more_than_one_year: bool | None = Field(
+        default=None, description="Whether the offering is expected to last over a year"
+    )
+
+    minimum_investment: int | None = Field(
+        default=None, description="Minimum investment accepted, in dollars"
+    )
+    total_offering_amount: int | None = Field(
+        default=None, description="Total offering amount, in dollars"
+    )
+    total_amount_sold: int | None = Field(
+        default=None, description="Amount sold so far, in dollars"
+    )
+    total_remaining: int | None = Field(
+        default=None, description="Amount remaining to be sold, in dollars"
+    )
+
+    has_non_accredited_investors: bool | None = Field(
+        default=None, description="Whether any non-accredited investors participated"
+    )
+    number_non_accredited: int | None = Field(
+        default=None, description="Number of non-accredited investors"
+    )
+    total_investors: int | None = Field(
+        default=None, description="Total number of investors already in the offering"
+    )
+
+    sales_commissions: int | None = Field(
+        default=None, description="Sales commissions paid, in dollars"
+    )
+    finders_fees: int | None = Field(
+        default=None, description="Finders' fees paid, in dollars"
+    )
+
+    related_persons: list[RelatedPerson] = Field(
+        default_factory=list, description="Executive officers, directors, and promoters"
+    )
+
+
 class Filing(BaseModel):
     """A single filing: its metadata and the documents it contains."""
 
