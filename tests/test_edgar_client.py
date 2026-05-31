@@ -8,7 +8,7 @@ from edgar_mcp.edgar_client import (
     EdgarError,
     pad_cik,
 )
-from edgar_mcp.formatting import build_filing_url
+from edgar_mcp.formatting import build_filing_url, parse_filing_ref
 
 
 def test_pad_cik_variants() -> None:
@@ -33,6 +33,31 @@ def test_build_filing_url_primary_document() -> None:
 def test_build_filing_url_falls_back_to_index() -> None:
     url = build_filing_url("320193", "0000320193-23-000106", None)
     assert url.endswith("000032019323000106/0000320193-23-000106-index.htm")
+
+
+def test_parse_filing_ref_from_url() -> None:
+    cik, acc = parse_filing_ref(
+        "https://www.sec.gov/Archives/edgar/data/320193/000032019323000106/aapl-20230930.htm",
+        None,
+    )
+    assert cik == "0000320193"
+    assert acc == "0000320193-23-000106"
+
+
+def test_parse_filing_ref_accession_with_cik() -> None:
+    cik, acc = parse_filing_ref("0000320193-23-000106", "320193")
+    assert cik == "0000320193"
+    assert acc == "0000320193-23-000106"
+
+
+def test_parse_filing_ref_accession_without_cik_raises() -> None:
+    with pytest.raises(ValueError):
+        parse_filing_ref("0000320193-23-000106", None)
+
+
+def test_parse_filing_ref_garbage_raises() -> None:
+    with pytest.raises(ValueError):
+        parse_filing_ref("not-a-filing", None)
 
 
 @respx.mock
