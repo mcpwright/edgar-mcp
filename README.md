@@ -55,6 +55,55 @@ Add to `claude_desktop_config.json`:
 }
 ```
 
+### OpenAI Agents SDK (Python)
+
+It's a standard MCP server, so it works with any MCP-capable client — not just Claude.
+With the [OpenAI Agents SDK](https://openai.github.io/openai-agents-python/mcp/):
+
+```python
+from agents import Agent, Runner
+from agents.mcp import MCPServerStdio
+
+async def main():
+    async with MCPServerStdio(
+        name="edgar",
+        params={
+            "command": "uvx",
+            "args": ["mcpwright-edgar"],
+            "env": {"EDGAR_MCP_USER_AGENT": "your-app you@example.com"},
+        },
+    ) as edgar:
+        agent = Agent(
+            name="Analyst",
+            instructions="Use the EDGAR tools for SEC filings and company data.",
+            mcp_servers=[edgar],
+        )
+        result = await Runner.run(
+            agent, "Recent Reg D raises in California — who's behind the biggest?"
+        )
+        print(result.final_output)
+```
+
+### Any other MCP client (Cursor, VS Code, Cline, Goose, Zed, …)
+
+They all launch a stdio MCP server the same way — point yours at:
+
+```json
+{
+  "mcpServers": {
+    "edgar": {
+      "command": "uvx",
+      "args": ["mcpwright-edgar"],
+      "env": { "EDGAR_MCP_USER_AGENT": "your-app you@example.com" }
+    }
+  }
+}
+```
+
+> Hosted chat connectors (e.g. ChatGPT connectors) expect a **remote** MCP server over
+> Streamable HTTP; `mcpwright-edgar` runs locally over stdio. Running it behind Streamable
+> HTTP for a hosted endpoint is straightforward if you need that.
+
 > **SEC etiquette:** the SEC requires a descriptive `User-Agent` with contact info and rate-limits
 > to ~10 req/s. Set your own via the `EDGAR_MCP_USER_AGENT` env var
 > (e.g. `"your-app your-email@example.com"`). The client throttles and retries for you.
