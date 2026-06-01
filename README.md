@@ -1,13 +1,16 @@
 # edgar-mcp
 
+<!-- mcp-name: io.github.mcpwright/edgar-mcp -->
+
 **SEC EDGAR filings, inside your agent.** An [MCP](https://modelcontextprotocol.io) server that
 lets an LLM resolve companies, search filings, and pull recent securities offerings straight from
 the SEC — built on Anthropic's official [`mcp` Python SDK](https://github.com/modelcontextprotocol/python-sdk).
 
 All tools are **read-only** and hit **public** SEC endpoints (no API key required).
 
-> Status: early but useful. Five tools work today (see below). See the roadmap
-> for what's next.
+> Status: 11 tools, working today (see below). Published on PyPI as
+> [`mcpwright-edgar`](https://pypi.org/project/mcpwright-edgar/) and in the
+> [official MCP Registry](https://registry.modelcontextprotocol.io). See the roadmap for what's next.
 
 ## Tools
 
@@ -27,26 +30,27 @@ All tools are **read-only** and hit **public** SEC endpoints (no API key require
 
 ## Install
 
-Requires Python 3.12+. Once published to PyPI, the zero-clone way to run it is:
+Requires Python 3.12+. The zero-clone way to run it (the PyPI package is
+`mcpwright-edgar`; the command, server, and tools are all "edgar"):
 
 ```bash
-uvx edgar-mcp
+uvx mcpwright-edgar
 ```
 
 ### Claude Code
 
 ```bash
-claude mcp add edgar -- uvx edgar-mcp
+claude mcp add edgar -- uvx mcpwright-edgar
 ```
 
 ### Claude Desktop
 
-Add to `claude_desktop_config.json` (see `examples/`):
+Add to `claude_desktop_config.json`:
 
 ```json
 {
   "mcpServers": {
-    "edgar": { "command": "uvx", "args": ["edgar-mcp"] }
+    "edgar": { "command": "uvx", "args": ["mcpwright-edgar"] }
   }
 }
 ```
