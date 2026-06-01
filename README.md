@@ -134,9 +134,16 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [x] Reg A (Form 1-A) support in `get_recent_offerings`
 - [x] `get_company_facts(cik)` — XBRL headline financials
 - [x] `get_filing_text` — return a document's text for summarization
-- [ ] Publish to PyPI + the official MCP Registry
+- [x] Published to PyPI (`mcpwright-edgar`) + the official MCP Registry (`io.github.mcpwright/edgar-mcp`)
+- [ ] `get_form_a_details` — parse Reg A (Form 1-A) offering data
+- [ ] Older-filing metadata (beyond the recent-submissions window)
 
-Contributions and issues welcome.
+## Questions & feedback
+
+- **Questions, ideas, or "could it do X?"** → [**Discussions**](https://github.com/mcpwright/edgar-mcp/discussions)
+- **Bugs & concrete feature requests** → [**Issues**](https://github.com/mcpwright/edgar-mcp/issues)
+
+Contributions welcome — and if you build something with it, I'd love to hear about it.
 
 ---
 
