@@ -1,24 +1,47 @@
 [project]
-name = "edgar-mcp"
+name = "mcpwright-edgar"
 version = "0.1.0"
-description = "MCP server for SEC EDGAR — resolve issuers, search filings, and pull recent Reg CF / Reg D offerings inside your agent."
+description = "MCP server for SEC EDGAR — resolve issuers (public & private), browse Reg CF/D/A raises, screen offerings, and read XBRL financials and insider trades."
 readme = "README.md"
+license = "MIT"
+license-files = ["LICENSE"]
 authors = [
-    { name = "Devender Gollapally", email = "4103+devender@users.noreply.github.com" }
+    { name = "Devender Gollapally" }
 ]
 requires-python = ">=3.12"
+keywords = [
+    "mcp", "model-context-protocol", "sec", "edgar", "fintech",
+    "claude", "regulation-crowdfunding", "form-d", "xbrl",
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "httpx>=0.28.1",
     "mcp[cli]>=1.27.2",
     "pydantic>=2.13.4",
 ]
 
+[project.urls]
+Homepage = "https://mcpwright.com/edgar"
+Repository = "https://github.com/mcpwright/edgar-mcp"
+Issues = "https://github.com/mcpwright/edgar-mcp/issues"
+
 [project.scripts]
-edgar-mcp = "edgar_mcp:main"
+mcpwright-edgar = "edgar_mcp:main"
 
 [build-system]
 requires = ["uv_build>=0.11.17,<0.12.0"]
 build-backend = "uv_build"
+
+# Distribution is "mcpwright-edgar" but the import package stays "edgar_mcp".
+[tool.uv.build-backend]
+module-name = "edgar_mcp"
 
 # ============================================================================
 # Ruff — lint + format
