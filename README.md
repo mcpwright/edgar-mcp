@@ -148,7 +148,7 @@ for a descriptive `User-Agent` with contact info (`EDGAR_MCP_USER_AGENT="your-ap
 you@example.com"`) — whatever you set there is sent to the SEC with each request, and nowhere
 else. Responses are cached **in memory only**; nothing is persisted to disk.
 
-Full policy: **https://mcpwright.com/privacy**
+Full policy: **https://mcpwright.com/privacy/**
 
 ## Questions & feedback
 
