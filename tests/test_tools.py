@@ -10,6 +10,19 @@ from edgar_mcp.edgar_client import (
     TICKERS_EXCHANGE_URL,
 )
 
+
+@pytest.mark.asyncio
+async def test_every_tool_is_directory_ready() -> None:
+    """Connectors-Directory contract: every tool has a human-readable title and
+    is annotated read-only. Guards against adding a tool without a title."""
+    tools = await server.mcp.list_tools()
+    assert len(tools) == 11, "tool count changed — title the new tool, then bump this count"
+    for tool in tools:
+        assert tool.title, f"{tool.name} is missing a title"
+        assert tool.annotations is not None, f"{tool.name} has no annotations"
+        assert tool.annotations.readOnlyHint is True, f"{tool.name} is not read-only"
+
+
 # An empty ticker map — forces the private-company search fallback.
 _EMPTY_TICKERS = {"fields": ["cik", "name", "ticker", "exchange"], "data": []}
 # browse-edgar company-search results (multi-match Atom: CIKs, no usable name).
