@@ -138,6 +138,18 @@ uv run mcp dev src/edgar_mcp/server.py   # poke the tools in the MCP Inspector
 - [ ] `get_form_a_details` — parse Reg A (Form 1-A) offering data
 - [ ] Older-filing metadata (beyond the recent-submissions window)
 
+## Privacy
+
+edgar-mcp runs entirely **on your machine** and collects, stores, or transmits **no personal
+data** — no accounts, no tracking, no telemetry. Its only outbound requests go to the **U.S.
+SEC's EDGAR services** (`data.sec.gov`, `efts.sec.gov`, `www.sec.gov`) to fetch the public
+filings you ask for; no API key is needed. One honest note: the SEC's fair-access policy asks
+for a descriptive `User-Agent` with contact info (`EDGAR_MCP_USER_AGENT="your-app
+you@example.com"`) — whatever you set there is sent to the SEC with each request, and nowhere
+else. Responses are cached **in memory only**; nothing is persisted to disk.
+
+Full policy: **https://mcpwright.com/privacy**
+
 ## Questions & feedback
 
 - **Questions, ideas, or "could it do X?"** → [**Discussions**](https://github.com/mcpwright/edgar-mcp/discussions)
