@@ -1,0 +1,59 @@
+{
+  "manifest_version": "0.4",
+  "name": "edgar",
+  "display_name": "EDGAR (SEC filings)",
+  "version": "0.1.0",
+  "description": "SEC filings in your agent: issuers, Reg CF/D/A raises, XBRL financials, insider trades.",
+  "long_description": "An MCP server that puts U.S. SEC EDGAR inside your agent. Resolve any company (exchange-listed or private), browse and search filings, screen recent Reg CF / Reg D / Reg A raises and parse their actual deal economics, pull XBRL headline financials, and read insider (Section 16) trades. All tools are read-only over public SEC endpoints — no API key required. The client respects SEC fair-access etiquette (descriptive User-Agent, ~8 req/s throttle, retries) and caches responses in memory only.",
+  "author": {
+    "name": "Devender Gollapally",
+    "url": "https://github.com/devender"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/mcpwright/edgar-mcp"
+  },
+  "homepage": "https://mcpwright.com/edgar",
+  "documentation": "https://mcpwright.com/edgar",
+  "icon": "icon.png",
+  "license": "MIT",
+  "privacy_policies": ["https://mcpwright.com/privacy/"],
+  "server": {
+    "type": "uv",
+    "entry_point": "src/edgar_mcp/server.py",
+    "mcp_config": {
+      "command": "uv",
+      "args": ["run", "--directory", "${__dirname}", "mcpwright-edgar"],
+      "env": {
+        "EDGAR_MCP_USER_AGENT": "${user_config.user_agent}"
+      }
+    }
+  },
+  "user_config": {
+    "user_agent": {
+      "type": "string",
+      "title": "SEC User-Agent (contact info)",
+      "description": "The SEC's fair-access policy asks for a descriptive User-Agent with contact info, e.g. 'your-app you@example.com'. Sent only to the SEC.",
+      "sensitive": false,
+      "required": false,
+      "default": "edgar-mcp/0.1 (https://github.com/mcpwright/edgar-mcp)"
+    }
+  },
+  "tools": [
+    { "name": "lookup_issuer", "description": "Resolve a ticker or company name to a CIK — exchange-listed and private filers." },
+    { "name": "list_filings", "description": "An issuer's most recent filings, newest first; optional form filter." },
+    { "name": "search_filings", "description": "Full-text search across filing documents." },
+    { "name": "get_recent_offerings", "description": "Recent Reg CF / Reg D / Reg A raises, optionally filtered by state." },
+    { "name": "get_filing", "description": "Open a filing: metadata plus every document with links." },
+    { "name": "get_form_d_details", "description": "Parse a Reg D raise: amount, sold, investors, industry, people." },
+    { "name": "get_form_c_details", "description": "Parse a Reg CF raise: target/max, price, terms, two-year financials." },
+    { "name": "get_company_facts", "description": "XBRL headline financials for public reporting companies." },
+    { "name": "get_filing_text", "description": "A document's text (HTML stripped), paginated, for reading/summarizing." },
+    { "name": "get_insider_trades", "description": "Recent Form 4 insider transactions: owner, action, shares, price." },
+    { "name": "get_insiders", "description": "A company's insiders (officers, directors, >10% owners) and roles." }
+  ],
+  "tools_generated": false,
+  "compatibility": {
+    "platforms": ["darwin", "win32", "linux"]
+  }
+}
