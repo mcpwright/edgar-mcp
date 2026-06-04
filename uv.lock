@@ -543,12 +543,26 @@ cli = [
 ]
 
 [[package]]
+name = "mcpwright-core"
+version = "0.1.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "httpx" },
+    { name = "mcp", extra = ["cli"] },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/d9/98/4b40d8dc7281efd53ea17a9d96d30473085f8dc52362db69b7e884b77237/mcpwright_core-0.1.1.tar.gz", hash = "sha256:2e3a5ac50a63b86f53a2d86b79bb6057f3531002bc72c0c762b4c8ee1ff5dc1f", size = 7889, upload-time = "2026-06-04T05:13:07.938Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/26/cd/075e99938a9ae8229552ddd964fff166397454719c0911b6c197824c42a8/mcpwright_core-0.1.1-py3-none-any.whl", hash = "sha256:01616f450ee81a8fe1a587c9c08da85e66ece96d377e2dd2316b89020e8fa5b9", size = 9625, upload-time = "2026-06-04T05:13:08.861Z" },
+]
+
+[[package]]
 name = "mcpwright-edgar"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
     { name = "httpx" },
     { name = "mcp", extra = ["cli"] },
+    { name = "mcpwright-core" },
     { name = "pydantic" },
 ]
 
@@ -567,6 +581,7 @@ dev = [
 requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "mcp", extras = ["cli"], specifier = ">=1.27.2" },
+    { name = "mcpwright-core", specifier = ">=0.1.1,<0.2" },
     { name = "pydantic", specifier = ">=2.13.4" },
 ]
 

@@ -5,21 +5,20 @@ Handles what the SEC asks of API consumers:
 - staying under the ~10 requests/second fair-access limit,
 - retrying transient errors (429 / 5xx) with exponential backoff.
 
-All endpoints are public and require no API key.
+The HTTP plumbing (retry/backoff, throttle, lifecycle) lives in
+``mcpwright_core.AsyncHttpClient``; this module adds the SEC endpoints and an
+in-memory response cache. All endpoints are public and require no API key.
 See https://www.sec.gov/os/webmaster-faq#developers
 """
 
 from __future__ import annotations
 
-import asyncio
 import os
 import re
-import time
 from typing import Any, cast
 
-import httpx
-
-from .cache import TTLCache
+from mcpwright_core import AsyncHttpClient, RateLimiter, TTLCache
+from mcpwright_core.errors import HttpError
 
 # --- Public SEC endpoints ---------------------------------------------------
 TICKERS_EXCHANGE_URL = "https://www.sec.gov/files/company_tickers_exchange.json"
@@ -38,7 +37,7 @@ DEFAULT_USER_AGENT = os.environ.get(
 )
 
 # The SEC asks consumers to stay at or under 10 req/s; ~8 req/s leaves headroom.
-_MIN_INTERVAL = 1.0 / 8
+_RATE_PER_SEC = 8
 
 # Cache TTLs (seconds), chosen by how volatile each endpoint is.
 _TTL_IMMUTABLE = 7 * 24 * 3600  # filing-archive content never changes per accession
@@ -62,7 +61,7 @@ def _ttl_for(url: str) -> float:
     return _TTL_DEFAULT
 
 
-class EdgarError(RuntimeError):
+class EdgarError(HttpError):
     """Raised when the SEC API returns an error we can't recover from."""
 
 
@@ -74,24 +73,12 @@ def pad_cik(cik: str | int) -> str:
     return digits.zfill(10)
 
 
-class _RateLimiter:
-    """Serialize requests so consecutive calls are spaced >= min_interval apart."""
+class EdgarClient(AsyncHttpClient):
+    """SEC EDGAR client: the shared HTTP base + an in-memory response cache.
 
-    def __init__(self, min_interval: float = _MIN_INTERVAL) -> None:
-        self._min_interval = min_interval
-        self._lock = asyncio.Lock()
-        self._last = 0.0
-
-    async def wait(self) -> None:
-        async with self._lock:
-            delay = self._min_interval - (time.monotonic() - self._last)
-            if delay > 0:
-                await asyncio.sleep(delay)
-            self._last = time.monotonic()
-
-
-class EdgarClient:
-    """Thin async wrapper over the SEC's public JSON endpoints."""
+    Throttled to the SEC's fair-access limit, retrying transient errors, and
+    caching responses per a TTL policy keyed on how volatile each endpoint is.
+    """
 
     def __init__(
         self,
@@ -100,76 +87,44 @@ class EdgarClient:
         max_retries: int = 3,
         cache: bool = True,
     ) -> None:
-        self._client = httpx.AsyncClient(
-            headers={"User-Agent": user_agent, "Accept-Encoding": "gzip, deflate"},
-            timeout=httpx.Timeout(30.0),
+        super().__init__(
+            user_agent=user_agent,
+            max_retries=max_retries,
+            rate_limiter=RateLimiter.per_second(_RATE_PER_SEC),
+            error_cls=EdgarError,
             follow_redirects=True,
         )
-        self._limiter = _RateLimiter()
-        self._max_retries = max_retries
         # On by default; set EDGAR_MCP_CACHE=0 to disable.
         enabled = cache and os.environ.get("EDGAR_MCP_CACHE", "1") not in ("0", "false")
         self._cache: TTLCache | None = TTLCache() if enabled else None
 
-    async def __aenter__(self) -> EdgarClient:
-        return self
-
-    async def __aexit__(self, *_exc: object) -> None:
-        await self.aclose()
-
-    async def aclose(self) -> None:
-        await self._client.aclose()
-
-    async def _request(
-        self, url: str, params: dict[str, Any] | None = None
-    ) -> httpx.Response:
-        """GET a URL with throttling and retry on transient failures."""
-        last_exc: Exception | None = None
-        for attempt in range(self._max_retries):
-            await self._limiter.wait()
-            try:
-                resp = await self._client.get(url, params=params)
-            except httpx.HTTPError as exc:  # network/timeout — retry
-                last_exc = exc
-                await asyncio.sleep(2**attempt)
-                continue
-
-            if resp.status_code == 404:
-                raise EdgarError(f"Not found: {resp.url}")
-            if resp.status_code == 429 or resp.status_code >= 500:  # transient — retry
-                last_exc = EdgarError(f"SEC returned {resp.status_code} for {resp.url}")
-                await asyncio.sleep(2**attempt)
-                continue
-            resp.raise_for_status()
-            return resp
-
-        raise EdgarError(
-            f"SEC request failed after {self._max_retries} attempts: {url}"
-        ) from last_exc
-
     async def get_json(
-        self, url: str, params: dict[str, Any] | None = None
+        self, url: str, *, params: dict[str, Any] | None = None
     ) -> dict[str, Any]:
-        """GET a URL and parse the JSON body (cached per TTL policy)."""
+        """GET a URL and parse the JSON body (cached per TTL policy).
+
+        Every EDGAR JSON endpoint returns an object, so this narrows the base
+        client's ``Any`` return to ``dict[str, Any]``.
+        """
         key = f"json:{_cache_key(url, params)}"
         if self._cache is not None:
             hit, value = await self._cache.get(key)
             if hit:
                 return cast("dict[str, Any]", value)
-        resp = await self._request(url, params)
+        resp = await self.request("GET", url, params=params)
         data: dict[str, Any] = resp.json()
         if self._cache is not None:
             await self._cache.set(key, data, _ttl_for(url), size=len(resp.content))
         return data
 
-    async def get_text(self, url: str, params: dict[str, Any] | None = None) -> str:
+    async def get_text(self, url: str, *, params: dict[str, Any] | None = None) -> str:
         """GET a URL and return the raw text body (cached per TTL policy)."""
         key = f"text:{_cache_key(url, params)}"
         if self._cache is not None:
             hit, value = await self._cache.get(key)
             if hit:
                 return cast("str", value)
-        resp = await self._request(url, params)
+        resp = await self.request("GET", url, params=params)
         text = resp.text
         if self._cache is not None:
             await self._cache.set(key, text, _ttl_for(url), size=len(text))
@@ -229,7 +184,7 @@ class EdgarClient:
         """
         text = await self.get_text(
             BROWSE_EDGAR_URL,
-            {
+            params={
                 "action": "getcompany",
                 "company": query,
                 "type": "",
@@ -248,7 +203,7 @@ class EdgarClient:
         """The canonical (conformed) name for a CIK, or None if not found."""
         text = await self.get_text(
             BROWSE_EDGAR_URL,
-            {
+            params={
                 "action": "getcompany",
                 "CIK": pad_cik(cik),
                 "type": "",
