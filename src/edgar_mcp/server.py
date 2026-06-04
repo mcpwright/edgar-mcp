@@ -9,11 +9,10 @@ from __future__ import annotations
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass
-from typing import cast
 from urllib.parse import urlparse
 
 from mcp.server.fastmcp import Context, FastMCP
-from mcp.types import ToolAnnotations
+from mcpwright_core import READ_ONLY, app_context
 
 from .edgar_client import EdgarClient, EdgarError
 from .formatting import (
@@ -85,17 +84,13 @@ async def _lifespan(_server: FastMCP) -> AsyncIterator[AppContext]:
 
 mcp = FastMCP("edgar", instructions=_INSTRUCTIONS, lifespan=_lifespan)
 
-# Tools only read public data and reach out to the open web.
-_READ_ONLY = ToolAnnotations(readOnlyHint=True, openWorldHint=True)
-
 
 def _edgar(ctx: Context) -> EdgarClient:
     """The shared EDGAR client from the lifespan context."""
-    app = cast(AppContext, ctx.request_context.lifespan_context)
-    return app.edgar
+    return app_context(ctx, AppContext).edgar
 
 
-@mcp.tool(title="Look up an issuer", annotations=_READ_ONLY)
+@mcp.tool(title="Look up an issuer", annotations=READ_ONLY)
 async def lookup_issuer(query: str, ctx: Context, limit: int = 10) -> list[Issuer]:
     """Resolve a company name or ticker to its SEC CIK and basic identity.
 
@@ -108,7 +103,7 @@ async def lookup_issuer(query: str, ctx: Context, limit: int = 10) -> list[Issue
     return await lookup_issuers(_edgar(ctx), query, limit)
 
 
-@mcp.tool(title="List an issuer's filings", annotations=_READ_ONLY)
+@mcp.tool(title="List an issuer's filings", annotations=READ_ONLY)
 async def list_filings(
     cik_or_query: str, ctx: Context, form_type: str | None = None, limit: int = 20
 ) -> list[FilingHit]:
@@ -148,7 +143,7 @@ async def list_filings(
     return out
 
 
-@mcp.tool(title="Search filings full-text", annotations=_READ_ONLY)
+@mcp.tool(title="Search filings full-text", annotations=READ_ONLY)
 async def search_filings(
     query: str,
     ctx: Context,
@@ -170,7 +165,7 @@ async def search_filings(
     return [FilingHit(**filing_fields_from_efts(h)) for h in hits[:limit]]
 
 
-@mcp.tool(title="Browse recent offerings", annotations=_READ_ONLY)
+@mcp.tool(title="Browse recent offerings", annotations=READ_ONLY)
 async def get_recent_offerings(
     ctx: Context,
     form: str = "C",
@@ -205,7 +200,7 @@ async def get_recent_offerings(
     return [Offering(**filing_fields_from_efts(h)) for h in hits[:limit]]
 
 
-@mcp.tool(title="Open a filing", annotations=_READ_ONLY)
+@mcp.tool(title="Open a filing", annotations=READ_ONLY)
 async def get_filing(
     accession_or_url: str, ctx: Context, cik: str | None = None
 ) -> Filing:
@@ -259,7 +254,7 @@ async def get_filing(
     )
 
 
-@mcp.tool(title="Parse a Form D (Reg D)", annotations=_READ_ONLY)
+@mcp.tool(title="Parse a Form D (Reg D)", annotations=READ_ONLY)
 async def get_form_d_details(
     accession_or_url: str, ctx: Context, cik: str | None = None
 ) -> FormDDetails:
@@ -290,7 +285,7 @@ async def get_form_d_details(
     )
 
 
-@mcp.tool(title="Parse a Form C (Reg CF)", annotations=_READ_ONLY)
+@mcp.tool(title="Parse a Form C (Reg CF)", annotations=READ_ONLY)
 async def get_form_c_details(
     accession_or_url: str, ctx: Context, cik: str | None = None
 ) -> FormCDetails:
@@ -321,7 +316,7 @@ async def get_form_c_details(
     )
 
 
-@mcp.tool(title="Get company financials (XBRL)", annotations=_READ_ONLY)
+@mcp.tool(title="Get company financials (XBRL)", annotations=READ_ONLY)
 async def get_company_facts(cik_or_query: str, ctx: Context) -> CompanyFacts:
     """Headline financials for a public reporting company, from its XBRL facts.
 
@@ -346,7 +341,7 @@ async def get_company_facts(cik_or_query: str, ctx: Context) -> CompanyFacts:
     return extract_company_facts(data, cik=cik)
 
 
-@mcp.tool(title="Read a filing document", annotations=_READ_ONLY)
+@mcp.tool(title="Read a filing document", annotations=READ_ONLY)
 async def get_filing_text(
     url: str, ctx: Context, offset: int = 0, max_chars: int = 20000
 ) -> FilingText:
@@ -407,7 +402,7 @@ async def _recent_ownership_filings(
     return out
 
 
-@mcp.tool(title="Get insider trades", annotations=_READ_ONLY)
+@mcp.tool(title="Get insider trades", annotations=READ_ONLY)
 async def get_insider_trades(
     cik_or_query: str, ctx: Context, limit: int = 20
 ) -> list[InsiderFiling]:
@@ -425,7 +420,7 @@ async def get_insider_trades(
     )
 
 
-@mcp.tool(title="List a company's insiders", annotations=_READ_ONLY)
+@mcp.tool(title="List a company's insiders", annotations=READ_ONLY)
 async def get_insiders(
     cik_or_query: str, ctx: Context, limit: int = 25
 ) -> list[Insider]:
