@@ -1,6 +1,6 @@
 [project]
 name = "mcpwright-edgar"
-version = "0.1.0"
+version = "0.1.1"
 description = "MCP server for SEC EDGAR — resolve issuers (public & private), browse Reg CF/D/A raises, screen offerings, and read XBRL financials and insider trades."
 readme = "README.md"
 license = "MIT"

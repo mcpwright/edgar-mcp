@@ -3,7 +3,7 @@
   "name": "io.github.mcpwright/edgar-mcp",
   "title": "EDGAR (SEC filings)",
   "description": "SEC filings in your agent: issuers, Reg CF/D/A raises, XBRL financials, insider trades.",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "repository": {
     "url": "https://github.com/mcpwright/edgar-mcp",
     "source": "github"
@@ -12,7 +12,7 @@
     {
       "registryType": "pypi",
       "identifier": "mcpwright-edgar",
-      "version": "0.1.0",
+      "version": "0.1.1",
       "transport": {
         "type": "stdio"
       },

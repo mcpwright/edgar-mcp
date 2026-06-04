@@ -2,7 +2,7 @@
   "manifest_version": "0.4",
   "name": "edgar",
   "display_name": "EDGAR (SEC filings)",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "SEC filings in your agent: issuers, Reg CF/D/A raises, XBRL financials, insider trades.",
   "long_description": "An MCP server that puts U.S. SEC EDGAR inside your agent. Resolve any company (exchange-listed or private), browse and search filings, screen recent Reg CF / Reg D / Reg A raises and parse their actual deal economics, pull XBRL headline financials, and read insider (Section 16) trades. All tools are read-only over public SEC endpoints — no API key required. The client respects SEC fair-access etiquette (descriptive User-Agent, ~8 req/s throttle, retries) and caches responses in memory only.",
   "author": {
