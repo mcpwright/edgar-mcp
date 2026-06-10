@@ -157,6 +157,11 @@ async def search_filings(
     `query`: free text (use quotes inside the string for exact phrases).
     `forms`: optional list of form types to restrict to, e.g. ["10-K", "8-K"].
     `date_from` / `date_to`: ISO dates (YYYY-MM-DD).
+
+    Coverage: EDGAR full-text search only indexes filings from 2001 onward, so
+    an empty result does NOT mean no earlier filing exists. (`list_filings`
+    shows an issuer's most recent filings and may also not reach that far back
+    for heavy filers.)
     """
     data = await _edgar(ctx).full_text_search(
         query, forms=forms, date_from=date_from, date_to=date_to
@@ -320,13 +325,20 @@ async def get_form_c_details(
 async def get_company_facts(cik_or_query: str, ctx: Context) -> CompanyFacts:
     """Headline financials for a public reporting company, from its XBRL facts.
 
-    Returns the latest annual values for revenue, gross profit, operating
-    income, net income, total assets, liabilities, stockholders' equity, and
-    cash. `cik_or_query`: a CIK or a name/ticker to resolve.
+    Returns the latest annual (or most recently reported) values for revenue,
+    gross profit, operating income, net income, total assets, liabilities,
+    stockholders' equity, and cash. `cik_or_query`: a CIK or a name/ticker to
+    resolve.
 
     Only companies that file XBRL (public reporting companies) have this — most
     private Reg CF / Reg D issuers do not; use `get_form_c_details` /
     `get_form_d_details` for those instead.
+
+    Each metric is picked independently — its latest annual (10-K/FY) value
+    when one exists, otherwise its most recent reported value (which can be a
+    quarterly figure) — so metrics can come from different fiscal years or
+    periods. Check each fact's `fiscal_year` / `period_end` / `form` before
+    combining or comparing them.
     """
     edgar = _edgar(ctx)
     cik = await resolve_cik(edgar, cik_or_query)
