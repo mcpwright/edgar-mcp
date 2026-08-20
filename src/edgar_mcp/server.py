@@ -52,8 +52,12 @@ Typical flow:
   public and private/non-exchange filers). Use the returned 10-digit CIK with
   the other tools. If several issuers match, ask the user which one they mean.
 - Discover raises with `get_recent_offerings` (form "C"=Reg CF, "D"=Reg D,
-  "A"=Reg A; optional `state` filter), then screen one with `get_form_d_details`
-  or `get_form_c_details` for the actual economics.
+  "A"=Reg A — the 1-A statements plus the qualified 253G2 offering circulars;
+  optional `state` filter), then screen one with `get_form_d_details` or
+  `get_form_c_details` for the actual economics. Reg A pricing lives in the 253G2
+  circular's narrative HTML (no structured parser) — open one with `get_filing`
+  and read it with `get_filing_text`; `list_filings(issuer, "253G2")` gives an
+  issuer's supplement history (a price walk-up across successive 253G2s).
 - `list_filings` for an issuer's filing history; `search_filings` for full-text.
 - `get_filing` lists a filing's documents; pass a document URL to
   `get_filing_text` to read/summarize it (paginated — filings can be huge).
@@ -181,23 +185,34 @@ async def get_recent_offerings(
     """List recent securities offerings filed with the SEC, newest first.
 
     `form`: "C" for Regulation Crowdfunding (Form C family — C, C/A, C-U, C-AR),
-    "D" for Regulation D (Form D family — D, D/A), or "A" for Regulation A
-    (Form 1-A family — 1-A, 1-A/A, 1-A POS).
+    "D" for Regulation D (Form D family — D, D/A), or "A" for Regulation A —
+    both the Form 1-A offering statements (1-A and its 1-A/A amendments) AND the
+    qualified offering circulars (Form 253G2), which carry the actual per-share
+    price; a Reg A "price walk-up" typically appears as successive 253G2
+    supplements raising that price.
     `since`: optional ISO date (YYYY-MM-DD) lower bound on the filing date.
     `state`: optional 2-letter US state code (e.g. "CA") filtering on the
     issuer's principal place of business; comma-separate for several.
     Returns issuer, exact form, filed date, accession number, and a link.
 
-    Note: there's no industry filter here — EDGAR doesn't populate an industry
-    code on these listings. To screen by industry, open a result with
-    `get_form_d_details` (its `industry_group`) or `get_form_c_details`.
+    Notes:
+    - No industry filter — EDGAR doesn't populate an industry code on these
+      listings. To screen by industry, open a result with `get_form_d_details`
+      (its `industry_group`) or `get_form_c_details`.
+    - A 253G2 is a narrative-HTML offering circular (no structured parser like
+      Form C/D): open one with `get_filing` and read the price with
+      `get_filing_text`. For one issuer's price history over time, use
+      `list_filings(issuer, "253G2")` — the walk-up is the per-share price rising
+      across their successive 253G2 supplements. (A price change is usually filed
+      as 253G2; occasionally an issuer files one as a 253G3 material-change
+      supplement instead.)
     """
-    forms_by_regime = {"C": "C", "D": "D", "A": "1-A"}
+    forms_by_regime = {"C": ["C"], "D": ["D"], "A": ["1-A", "253G2"]}
     f = form.strip().upper()
     if f not in forms_by_regime:
         raise ValueError('form must be "C" (Reg CF), "D" (Reg D), or "A" (Reg A)')
     data = await _edgar(ctx).full_text_search(
-        forms=[forms_by_regime[f]],
+        forms=forms_by_regime[f],
         date_from=since,
         location=state.strip().upper() if state else None,
     )

@@ -38,11 +38,12 @@ class FilingHit(BaseModel):
 
 
 class Offering(BaseModel):
-    """A securities offering filing — Reg CF (Form C) or Reg D (Form D)."""
+    """A securities offering filing — Reg CF (Form C), Reg D (Form D), or
+    Reg A (Form 1-A statements and 253G2 offering circulars)."""
 
     issuer: str = Field(description="Issuer name")
     cik: str | None = Field(default=None, description="10-digit CIK of the issuer")
-    form: str = Field(description="Form family, e.g. C, C/A, D, D/A")
+    form: str = Field(description="Form family, e.g. C, C/A, D, D/A, 1-A, 253G2")
     filed: str = Field(description="Filing date, YYYY-MM-DD")
     accession_no: str = Field(description="SEC accession number")
     url: str | None = Field(default=None, description="Link to the filing")
