@@ -16,7 +16,9 @@ async def test_every_tool_is_directory_ready() -> None:
     """Connectors-Directory contract: every tool has a human-readable title and
     is annotated read-only. Guards against adding a tool without a title."""
     tools = await server.mcp.list_tools()
-    assert len(tools) == 11, "tool count changed — title the new tool, then bump this count"
+    assert len(tools) == 11, (
+        "tool count changed — title the new tool, then bump this count"
+    )
     for tool in tools:
         assert tool.title, f"{tool.name} is missing a title"
         assert tool.annotations is not None, f"{tool.name} has no annotations"
@@ -56,6 +58,57 @@ _EFTS_FORM_C = {
     }
 }
 
+# One efts hit shaped like a real Reg A 253G2 offering circular (Mode Mobile).
+# Its primary document is an .htm circular, not a primary_doc.xml.
+_EFTS_FORM_253G2 = {
+    "hits": {
+        "hits": [
+            {
+                "_id": "0001493152-26-038483:form253g2.htm",
+                "_source": {
+                    "ciks": ["0001748441"],
+                    "display_names": ["MODE MOBILE, INC.  (CIK 0001748441)"],
+                    "form": "253G2",
+                    "root_forms": ["253G2"],
+                    "file_date": "2026-08-14",
+                    "adsh": "0001493152-26-038483",
+                },
+            }
+        ]
+    }
+}
+
+# A mixed Reg A page — a 253G2 circular (newest) and a 1-A statement — as EFTS
+# returns them for forms=1-A,253G2: interleaved, newest-first.
+_EFTS_REG_A_MIXED = {
+    "hits": {
+        "hits": [
+            {
+                "_id": "0001493152-26-038483:form253g2.htm",
+                "_source": {
+                    "ciks": ["0001748441"],
+                    "display_names": ["MODE MOBILE, INC.  (CIK 0001748441)"],
+                    "form": "253G2",
+                    "root_forms": ["253G2"],
+                    "file_date": "2026-08-14",
+                    "adsh": "0001493152-26-038483",
+                },
+            },
+            {
+                "_id": "0002141083-26-000001:partii_and_iii.htm",
+                "_source": {
+                    "ciks": ["0002141083"],
+                    "display_names": ["ECOSPIRE GLOBAL INC.  (CIK 0002141083)"],
+                    "form": "1-A",
+                    "root_forms": ["1-A"],
+                    "file_date": "2026-08-10",
+                    "adsh": "0002141083-26-000001",
+                },
+            },
+        ]
+    }
+}
+
 
 @respx.mock
 @pytest.mark.asyncio
@@ -83,12 +136,64 @@ async def test_get_recent_offerings_rejects_bad_form(ctx) -> None:
 
 @respx.mock
 @pytest.mark.asyncio
-async def test_get_recent_offerings_reg_a_maps_to_1a(ctx) -> None:
+async def test_get_recent_offerings_reg_a_includes_253g2(ctx) -> None:
+    """Reg A browses BOTH the 1-A offering statements and the qualified 253G2
+    offering circulars — where the per-share price (and a walk-up) lives."""
     route = respx.get(FULLTEXT_SEARCH_URL).mock(
         return_value=httpx.Response(200, json=_EFTS_FORM_C)
     )
     await server.get_recent_offerings(ctx, "A")
-    assert route.calls.last.request.url.params["forms"] == "1-A"
+    assert route.calls.last.request.url.params["forms"] == "1-A,253G2"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_recent_offerings_parses_253g2_hit(ctx) -> None:
+    """A 253G2 offering-circular hit maps to an Offering with the .htm primary
+    document (unlike Form C/D, whose primary doc is primary_doc.xml)."""
+    respx.get(FULLTEXT_SEARCH_URL).mock(
+        return_value=httpx.Response(200, json=_EFTS_FORM_253G2)
+    )
+    offerings = await server.get_recent_offerings(ctx, "A")
+
+    assert len(offerings) == 1
+    o = offerings[0]
+    assert o.form == "253G2"
+    assert o.cik == "0001748441"
+    assert o.accession_no == "0001493152-26-038483"
+    assert o.url is not None
+    assert o.url.endswith("000149315226038483/form253g2.htm")
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_recent_offerings_reg_a_mixes_1a_and_253g2(ctx) -> None:
+    """The actual new behavior: a Reg A page carries both 1-A and 253G2 filings,
+    each parses, and EFTS's newest-first order is preserved across the mix."""
+    respx.get(FULLTEXT_SEARCH_URL).mock(
+        return_value=httpx.Response(200, json=_EFTS_REG_A_MIXED)
+    )
+    offerings = await server.get_recent_offerings(ctx, "A")
+
+    assert [o.form for o in offerings] == ["253G2", "1-A"]  # newest-first preserved
+    assert offerings[0].filed == "2026-08-14"
+    assert offerings[1].filed == "2026-08-10"
+    assert offerings[0].cik == "0001748441"
+    assert offerings[1].cik == "0002141083"
+
+
+@respx.mock
+@pytest.mark.asyncio
+async def test_get_recent_offerings_reg_a_state_filter(ctx) -> None:
+    """Reg A carries BOTH the two-form filter and the state filter — a future
+    refactor must not drop either."""
+    route = respx.get(FULLTEXT_SEARCH_URL).mock(
+        return_value=httpx.Response(200, json=_EFTS_REG_A_MIXED)
+    )
+    await server.get_recent_offerings(ctx, "A", state="ca")
+    params = route.calls.last.request.url.params
+    assert params["forms"] == "1-A,253G2"
+    assert params["locationCodes"] == "CA"
 
 
 @respx.mock
